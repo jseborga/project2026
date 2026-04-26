@@ -39,6 +39,28 @@ Todos los cambios notables del proyecto se registran aquí. Formato basado en
   KPIs (presupuesto, costo real, # rubros/items/insumos), tabla de items
   agrupada por rubro con cantidad/PU/subtotal/incidencia, panel de insumos
   con tipo (mat/mo/eq/sub), PU, cantidad, monto y producto Odoo vinculado.
+- **Catálogo refinado ✅**: items APU expandibles (chevron) que muestran su
+  composición de costo (apu.line con insumo/rendimiento/PU/subtotal,
+  ordenado por tipo). Insumos del proyecto separados en 4 secciones por
+  tipo (Materiales/Mano de obra/Equipo/Subcontratos) con subtotal por
+  sección, como agrupa Odoo nativamente.
+
+### Fase 3 ✅ — Plan real (Gantt read-only)
+- Gateway: `GET /projects/{id}/plan` devuelve `apu.project.plan` activo +
+  todas las `apu.project.plan.line` (jerárquicas, con generic_start/finish_day,
+  early/late, critical, milestone) + `apu.project.plan.link` (dependencias
+  fs/ss/ff/sf con lag). 4 tests verdes.
+- Frontend: tab "Plan" ahora habilitado, hace lazy-load del endpoint.
+  - PlanHeaderBar: KPIs (críticas, cuadrillas, readiness%, earned amount)
+    + badge "Línea base congelada" con botón Desbloquear (placeholder fase 4).
+  - PlanTab: Gantt con columna nombres jerárquica (chevrons para grupos
+    colapsables) + timeline en días genéricos (24px/día, líneas semanales).
+    Barras de actividades, rombos para hitos, sumario fino para grupos.
+    Críticas en color acento. Dependencias FS dibujadas como flechitas.
+  - 404 manejado: mensaje claro cuando un proyecto no tiene plan activo.
+- Verificado contra Plan V1 real del proyecto "Analisis Patologico BCP":
+  13 líneas (3 grupos + 10 actividades), 9 dependencias, 2 críticas,
+  baseline lockeada el 2026-04-14.
 
 ### Architecture
 - **Decisión 2026-04-26**: integración con Odoo via gateway FastAPI separado
