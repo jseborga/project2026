@@ -7,6 +7,23 @@ Todos los cambios notables del proyecto se registran aquí. Formato basado en
 ## [Unreleased]
 
 ### Architecture
+- **Hallazgo 2026-04-26 (introspección Odoo)**: el módulo `construction_apu`
+  + `seguimiento_proyecto` instalados en el Odoo del usuario son un mini-PM
+  completo (CPM, EVM, baseline, cuadrillas, cómputos, BIM bridge). Esto
+  cambia la propuesta: **no se necesita ningún módulo Odoo custom**, el
+  gateway pasa a ser mayormente proxy + cache + auth. Schema de 81 modelos
+  guardado en `project2026-api/schema.md` (gitignored). Mapping definitivo
+  app↔Odoo en memoria del proyecto.
+- Plan de fases revisado: 1 (`/projects`) ✅ → 2 (catálogo APU) → 3 (plan
+  con `apu.project.plan.line`) → 4 (edición) → 5 (consumo via
+  `apu.cost.entry`) → 6 (vincular contratos PO/SO).
+
+### Gateway (project2026-api)
+- **Fase 1 ✅**: `GET /projects` y `GET /projects/{id}` con filtro
+  multi-empresa, búsqueda por nombre, paginación. 8 tests verdes,
+  verificado end-to-end contra Odoo real (4 empresas, multi-tenancy ok).
+
+### Architecture
 - **Decisión 2026-04-26**: integración con Odoo via gateway FastAPI separado
   (repo paralelo `project2026-api`), no más deferred. Modelo de eventos hacia
   Odoo: materiales → `stock.move`, mano de obra propia → `account.analytic.line`,
