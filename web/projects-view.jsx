@@ -469,12 +469,175 @@ function CatalogTab({ project, catalog }) {
   );
 }
 
+// ── PlanTab (Gantt read-only contra apu.project.plan) ───────────────────
+
+const DAY_W = 24;       // px por día generico
+const NAME_COL_W = 320; // px columna nombres
+
+function PlanTab({ project, plan: planData }) {
+  const { plan, lines, links } = planData;
+  const [collapsed, setCollapsed] = React.useState({}); // {parent_id: bool}
+
+  // Visibles según colapso de padres
+  const visible = React.useMemo(() => {
+    const result = [];
+    const isHidden = (line) => {
+      let cur = line.parent_id;
+      while (cur) {
+        if (collapsed[cur]) return true;
+        const parent = lines.find(l => l.id === cur);
+        cur = parent?.parent_id;
+      }
+      return false;
+    };
+    lines.forEach(ln => { if (!isHidden(ln)) result.push(ln); });
+    return result;
+  }, [lines, collapsed]);
+
+  // Rango horizontal: de día 1 al máximo finish_day
+  const maxDay = lines.reduce((m, l) => Math.max(m, l.generic_finish_day || 0), 8);
+  const totalDays = Math.max(maxDay, 14);
+  const linksByTo = React.useMemo(() => {
+    const m = {};
+    links.forEach(l => { (m[l.to_line] = m[l.to_line] || []).push(l); });
+    return m;
+  }, [links]);
+
+  const childCount = React.useMemo(() => {
+    const m = {};
+    lines.forEach(l => { if (l.parent_id) m[l.parent_id] = (m[l.parent_id] || 0) + 1; });
+    return m;
+  }, [lines]);
+
+  return (
+    <div className="plan-tab">
+      <PlanHeaderBar plan={plan} />
+
+      <div className="plan-gantt">
+        {/* Header timeline */}
+        <div className="plan-grid plan-grid-head" style={{gridTemplateColumns: `${NAME_COL_W}px 1fr`}}>
+          <div className="plan-name-head">Actividad / agrupador</div>
+          <div className="plan-tl-head" style={{minWidth: totalDays * DAY_W}}>
+            {Array.from({length: totalDays}, (_, i) => i + 1).map(d => (
+              <div key={d} className={"plan-tl-day" + (d % 7 === 1 ? " plan-tl-week" : "")} style={{left: (d-1)*DAY_W, width: DAY_W}}>
+                {d}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Filas */}
+        <div className="plan-grid-body">
+          {visible.map(ln => {
+            const isGroup = (childCount[ln.id] || 0) > 0;
+            const isCollapsed = !!collapsed[ln.id];
+            const lvl = (ln.level || 1) - 1;
+            const barLeft = (Math.max(1, ln.generic_start_day) - 1) * DAY_W;
+            const barWidth = Math.max(1, (ln.generic_finish_day - ln.generic_start_day + 1)) * DAY_W;
+            const isMilestone = (ln.duration_days || 0) === 0 || ln.milestone_category;
+            const preds = linksByTo[ln.id] || [];
+            return (
+              <div key={ln.id} className="plan-grid plan-grid-row" style={{gridTemplateColumns: `${NAME_COL_W}px 1fr`}}>
+                <div className={"plan-name" + (isGroup ? " plan-name-group" : "") + (ln.is_critical ? " plan-name-critical" : "")}
+                     style={{paddingLeft: 8 + lvl * 14}}>
+                  {isGroup ? (
+                    <button className="plan-chevron" onClick={() => setCollapsed(c => ({...c, [ln.id]: !c[ln.id]}))}>
+                      <Icon name="chevronR" size={11} style={{transform: isCollapsed ? "none" : "rotate(90deg)", transition:"transform .15s"}} />
+                    </button>
+                  ) : (
+                    <span className="plan-chevron-spacer" />
+                  )}
+                  <span className="plan-name-text" title={ln.name}>{ln.code && <span className="plan-code">{ln.code}</span>}{ln.name}</span>
+                  <span className="plan-name-meta">
+                    {ln.duration_days > 0 && <span>{ln.duration_days}d</span>}
+                    {ln.is_critical && <span className="plan-pill plan-pill-crit">crítica</span>}
+                    {ln.actual_start && <span className="plan-pill plan-pill-real">en curso</span>}
+                  </span>
+                </div>
+                <div className="plan-tl-row" style={{minWidth: totalDays * DAY_W}}>
+                  {/* Líneas de grilla semana */}
+                  {Array.from({length: totalDays}, (_, i) => i + 1).map(d => (
+                    d % 7 === 1 ? <div key={d} className="plan-week-line" style={{left: (d-1)*DAY_W}} /> : null
+                  ))}
+                  {isMilestone ? (
+                    <div className={"plan-milestone" + (ln.is_critical ? " critical" : "")}
+                         style={{left: barLeft - 6}}
+                         title={`${ln.name} · día ${ln.generic_start_day}`}>◆</div>
+                  ) : (
+                    <div className={"plan-bar"
+                                  + (isGroup ? " plan-bar-group" : "")
+                                  + (ln.is_critical ? " plan-bar-critical" : "")}
+                         style={{left: barLeft, width: barWidth}}
+                         title={`${ln.name}\n${ln.duration_days}d · días ${ln.generic_start_day}-${ln.generic_finish_day}${ln.is_critical?" · CRÍTICA":""}`}>
+                      <span className="plan-bar-label">{ln.duration_days}d</span>
+                    </div>
+                  )}
+                  {/* Flechitas de dependencia (FS simple) */}
+                  {preds.map(link => {
+                    const from = lines.find(l => l.id === link.from_line);
+                    if (!from) return null;
+                    const fromX = (from.generic_finish_day) * DAY_W;
+                    const toX = barLeft;
+                    if (toX < fromX) return null;
+                    return (
+                      <div key={link.id} className="plan-arrow"
+                           style={{left: Math.min(fromX, toX), width: Math.abs(toX - fromX)}}
+                           title={`${link.type.toUpperCase()} lag ${link.lag_days}d`} />
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="plan-legend">
+        <span><span className="plan-legend-bar" /> Actividad</span>
+        <span><span className="plan-legend-bar plan-bar-critical" /> Crítica</span>
+        <span><span className="plan-legend-bar plan-bar-group" /> Grupo</span>
+        <span><span className="plan-legend-mile">◆</span> Hito</span>
+        <span className="plan-legend-meta">{plan.crew_count} cuadrillas · período de control: {plan.control_period_mode || "—"}</span>
+      </div>
+    </div>
+  );
+}
+
+function PlanHeaderBar({ plan }) {
+  return (
+    <div className="plan-header">
+      <div className="plan-header-main">
+        <strong>{plan.name}</strong>
+        {plan.baseline_date && <span className="plan-header-meta">Línea base: {plan.baseline_date}</span>}
+      </div>
+      <div className="plan-header-stats">
+        <div><span>Críticas</span><strong className="mono">{plan.critical_count}</strong></div>
+        <div><span>Cuadrillas</span><strong className="mono">{plan.crew_count}</strong></div>
+        <div><span>Readiness</span><strong className="mono">{plan.execution_readiness_pct.toFixed(1)}%</strong></div>
+        <div><span>Earned</span><strong className="mono">{_fmtN(plan.earned_amount)} {plan.currency?.name||""}</strong></div>
+      </div>
+      {plan.baseline_locked && (
+        <div className="plan-lock" title={`Línea base congelada por ${plan.baseline_locked_by?.name || "—"} el ${plan.baseline_locked_at || ""}`}>
+          🔒 Línea base congelada
+          <button className="plan-lock-btn" onClick={() => alert("La edición y desbloqueo de baseline llegan en fase 4")}>
+            Desbloquear
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function ProjectDetailView({ project, onBack }) {
   const [tab, setTab] = React.useState("catalog");
   const [catalog, setCatalog] = React.useState(null);
+  const [planData, setPlanData] = React.useState(null);
+  const [planError, setPlanError] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(null);
 
+  // Catálogo: siempre lo precargamos (la otra tab puede cargarse on-demand)
   React.useEffect(() => {
     let cancel = false;
     setLoading(true); setError(null);
@@ -484,6 +647,17 @@ function ProjectDetailView({ project, onBack }) {
       .finally(() => { if (!cancel) setLoading(false); });
     return () => { cancel = true; };
   }, [project.id]);
+
+  // Plan: lazy cuando se entra al tab Plan
+  React.useEffect(() => {
+    if (tab !== "plan" || planData || planError) return;
+    let cancel = false;
+    window.tramoApi.getPlan(project.id)
+      .then(p => { if (!cancel) setPlanData(p); })
+      .catch(e => { if (!cancel) setPlanError(e); });
+    return () => { cancel = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, project.id]);
 
   return (
     <div className="proj-detail">
@@ -505,7 +679,7 @@ function ProjectDetailView({ project, onBack }) {
         <button className={"proj-tab" + (tab === "catalog" ? " active" : "")} onClick={() => setTab("catalog")}>
           Catálogo APU
         </button>
-        <button className="proj-tab proj-tab-disabled" disabled title="Próximamente (fase 3)">
+        <button className={"proj-tab" + (tab === "plan" ? " active" : "")} onClick={() => setTab("plan")}>
           Plan
         </button>
         <button className="proj-tab proj-tab-disabled" disabled title="Próximamente (fase 5)">
@@ -513,10 +687,26 @@ function ProjectDetailView({ project, onBack }) {
         </button>
       </div>
 
-      {error && <div className="proj-error">⚠ {error}</div>}
-      {loading && <div className="proj-loading">Cargando catálogo…</div>}
-      {!loading && !error && catalog && tab === "catalog" && (
-        <CatalogTab project={project} catalog={catalog} />
+      {tab === "catalog" && (
+        <>
+          {error && <div className="proj-error">⚠ {error}</div>}
+          {loading && <div className="proj-loading">Cargando catálogo…</div>}
+          {!loading && !error && catalog && <CatalogTab project={project} catalog={catalog} />}
+        </>
+      )}
+
+      {tab === "plan" && (
+        <>
+          {planError && (
+            <div className="proj-error">
+              ⚠ {planError.status === 404
+                  ? "Este proyecto no tiene plan APU activo en Odoo. Creá uno en construction_apu y volvés."
+                  : planError.message}
+            </div>
+          )}
+          {!planData && !planError && <div className="proj-loading">Cargando plan…</div>}
+          {planData && <PlanTab project={project} plan={planData} />}
+        </>
       )}
     </div>
   );

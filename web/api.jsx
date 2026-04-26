@@ -54,6 +54,7 @@ const api = {
   },
   getProject: (id) => apiFetch(`/projects/${id}`),
   getCatalog: (id) => apiFetch(`/projects/${id}/catalog`),
+  getPlan: (id) => apiFetch(`/projects/${id}/plan`),
 };
 
 window.tramoApi = api;
