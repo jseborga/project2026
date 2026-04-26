@@ -53,6 +53,7 @@ const api = {
     return apiFetch(`/projects?${qs}`);
   },
   getProject: (id) => apiFetch(`/projects/${id}`),
+  getCatalog: (id) => apiFetch(`/projects/${id}/catalog`),
 };
 
 window.tramoApi = api;
