@@ -6,6 +6,16 @@ Todos los cambios notables del proyecto se registran aquí. Formato basado en
 
 ## [Unreleased]
 
+### Architecture
+- **Decisión 2026-04-26**: integración con Odoo via gateway FastAPI separado
+  (repo paralelo `project2026-api`), no más deferred. Modelo de eventos hacia
+  Odoo: materiales → `stock.move`, mano de obra propia → `account.analytic.line`,
+  servicios subcontratados → `account.move` ligado a `purchase.order.line`,
+  cierre de paquete con cliente → hito de `sale.order`. Contratos (PO/SO)
+  se vinculan a paquetes en la app. Scaffold del gateway listo (commit local
+  pendiente de push al nuevo repo); tests base pasan; falta introspección del
+  schema de `construction_apu` contra Odoo real.
+
 ### Added
 - Configuración Claude Code: `CLAUDE.md`, `.claude/settings.json`, `.mcp.json`
   con Playwright MCP para verificar deploys desde el navegador.
