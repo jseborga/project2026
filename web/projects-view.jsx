@@ -268,28 +268,110 @@ const _fmtN = (n, dec = 0) => n == null ? "—" :
   new Intl.NumberFormat("es-BO", { minimumFractionDigits: dec, maximumFractionDigits: dec }).format(n);
 const _fmtPct = (n) => n == null ? "—" : `${n.toFixed(1)}%`;
 
+const TYPE_LBL = { mat: "Materiales", mo: "Mano de obra", eq: "Equipo / Maquinaria", sub: "Subcontratos" };
+const TYPE_ORDER = ["mat", "mo", "eq", "sub"];
+
+function ItemRow({ it, currency, expanded, onToggle }) {
+  const subtotal = (it.qty || 0) * (it.unit_cost || 0);
+  // Composición por tipo (suma de líneas por tipo)
+  const compByType = {};
+  it.lines.forEach(ln => {
+    compByType[ln.type] = (compByType[ln.type] || 0) + (ln.subtotal || 0);
+  });
+  return (
+    <>
+      <tr className={(it.is_complementary ? "cat-row-complementary " : "") + (expanded ? "cat-row-open" : "") + (it.lines.length > 0 ? " cat-row-expandable" : "")}
+          onClick={it.lines.length > 0 ? onToggle : undefined}>
+        <td className="cat-expand-cell">
+          {it.lines.length > 0 ? (
+            <Icon name="chevronR" size={11} style={{transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s", color: "var(--ink-3)"}} />
+          ) : <span style={{display:"inline-block", width:11}} />}
+        </td>
+        <td>{it.name}{it.is_complementary && <span className="cat-tag">complementaria</span>}</td>
+        <td className="cat-uom">{it.uom || "—"}</td>
+        <td className="num mono">{_fmtN(it.qty, 2)}</td>
+        <td className="num mono">{_fmtN(it.unit_cost, 2)}</td>
+        <td className="num mono cat-ref">{_fmtN(it.ref_price, 2)}</td>
+        <td className="num mono"><strong>{_fmtN(subtotal)}</strong></td>
+        <td className="num mono cat-incid">{_fmtPct(it.incidence_pct)}</td>
+      </tr>
+      {expanded && (
+        <tr className="cat-lines-row">
+          <td></td>
+          <td colSpan={7}>
+            <div className="cat-lines-wrap">
+              <div className="cat-lines-summary">
+                <span className="cat-lines-title">Composición del PU directo ({_fmtN(it.unit_cost, 2)} {currency || ""}/{it.uom || "u"})</span>
+                <div className="cat-lines-sum">
+                  {TYPE_ORDER.map(t => compByType[t] ? (
+                    <span key={t} className={`cat-type cat-type-${t}`}>{TYPE_LBL[t]}: <strong>{_fmtN(compByType[t], 2)}</strong></span>
+                  ) : null)}
+                </div>
+              </div>
+              <table className="cat-lines-table">
+                <thead>
+                  <tr>
+                    <th>Insumo</th>
+                    <th>Tipo</th>
+                    <th>Unidad</th>
+                    <th className="num">Rendimiento</th>
+                    <th className="num">PU insumo</th>
+                    <th className="num">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...it.lines].sort((a, b) => TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type)).map(ln => (
+                    <tr key={ln.id}>
+                      <td>{ln.insumo?.name || "—"}</td>
+                      <td><span className={`cat-type cat-type-${ln.type}`}>{ln.type.toUpperCase()}</span></td>
+                      <td className="cat-uom">{ln.uom || "—"}</td>
+                      <td className="num mono">{_fmtN(ln.quantity, 4)}</td>
+                      <td className="num mono">{_fmtN(ln.price_unit, 2)}</td>
+                      <td className="num mono">{_fmtN(ln.subtotal, 2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
 function CatalogTab({ project, catalog }) {
+  const [expanded, setExpanded] = React.useState({}); // {itemId: bool}
+  const toggle = (id) => setExpanded(e => ({ ...e, [id]: !e[id] }));
+
   // KPIs
   const totalBudget = catalog.rubros.reduce((s, r) => s + (r.total_amount || 0), 0);
   const totalActual = catalog.items.reduce((s, it) => s + (it.actual_cost || 0), 0);
-  const insumosByType = catalog.insumos.reduce((acc, i) => {
-    acc[i.type] = (acc[i.type] || 0) + 1;
-    return acc;
-  }, {});
-  const typeLbl = { mat: "Materiales", mo: "Mano de obra", eq: "Equipo", sub: "Subcontratos" };
+  const currency = project.currency?.name || "";
 
-  // Group items by rubro for display
+  // Items por rubro
   const itemsByRubro = {};
   catalog.items.forEach(it => {
     const rid = it.rubro?.id ?? 0;
     (itemsByRubro[rid] = itemsByRubro[rid] || []).push(it);
   });
 
+  // Insumos por tipo + totales
+  const insumosByType = { mat: [], mo: [], eq: [], sub: [] };
+  catalog.insumos.forEach(i => {
+    if (insumosByType[i.type]) insumosByType[i.type].push(i);
+    else (insumosByType.mat).push(i); // fallback
+  });
+  const totalsByType = {};
+  TYPE_ORDER.forEach(t => {
+    totalsByType[t] = insumosByType[t].reduce((s, i) => s + (i.total_amount || 0), 0);
+  });
+
   return (
     <div className="cat-tab">
       <div className="cat-kpis">
-        <div className="cat-kpi"><span>Presupuesto</span><strong className="mono">{_fmtN(totalBudget)} {project.currency?.name || ""}</strong></div>
-        <div className="cat-kpi"><span>Costo real</span><strong className="mono">{_fmtN(totalActual)} {project.currency?.name || ""}</strong></div>
+        <div className="cat-kpi"><span>Presupuesto</span><strong className="mono">{_fmtN(totalBudget)} {currency}</strong></div>
+        <div className="cat-kpi"><span>Costo real</span><strong className="mono">{_fmtN(totalActual)} {currency}</strong></div>
         <div className="cat-kpi"><span>Rubros</span><strong className="mono">{catalog.rubros.length}</strong></div>
         <div className="cat-kpi"><span>Items APU</span><strong className="mono">{catalog.items.length}</strong></div>
         <div className="cat-kpi"><span>Insumos</span><strong className="mono">{catalog.insumos.length}</strong></div>
@@ -306,7 +388,7 @@ function CatalogTab({ project, catalog }) {
             <div className="cat-rubro-head">
               <div className="cat-rubro-name">{rubro.name}</div>
               <div className="cat-rubro-stats">
-                <span className="mono">{_fmtN(rubro.total_amount)} {project.currency?.name || ""}</span>
+                <span className="mono">{_fmtN(rubro.total_amount)} {currency}</span>
                 <span className="cat-rubro-incid mono">{_fmtPct(rubro.incidence_pct)}</span>
                 <span className="cat-rubro-count">{items.length} ítems</span>
               </div>
@@ -317,7 +399,8 @@ function CatalogTab({ project, catalog }) {
               <table className="cat-table">
                 <thead>
                   <tr>
-                    <th style={{width:"42%"}}>Item APU</th>
+                    <th style={{width:"24px"}}></th>
+                    <th style={{width:"40%"}}>Item APU</th>
                     <th>Unidad</th>
                     <th className="num">Cantidad</th>
                     <th className="num">PU directo</th>
@@ -328,15 +411,9 @@ function CatalogTab({ project, catalog }) {
                 </thead>
                 <tbody>
                   {items.map(it => (
-                    <tr key={it.id} className={it.is_complementary ? "cat-row-complementary" : ""}>
-                      <td>{it.name}{it.is_complementary && <span className="cat-tag">complementaria</span>}</td>
-                      <td className="cat-uom">{it.uom || "—"}</td>
-                      <td className="num mono">{_fmtN(it.qty, 2)}</td>
-                      <td className="num mono">{_fmtN(it.unit_cost, 2)}</td>
-                      <td className="num mono cat-ref">{_fmtN(it.ref_price, 2)}</td>
-                      <td className="num mono"><strong>{_fmtN(it.qty * it.unit_cost)}</strong></td>
-                      <td className="num mono cat-incid">{_fmtPct(it.incidence_pct)}</td>
-                    </tr>
+                    <ItemRow key={it.id} it={it} currency={currency}
+                             expanded={!!expanded[it.id]}
+                             onToggle={() => toggle(it.id)} />
                   ))}
                 </tbody>
               </table>
@@ -345,41 +422,48 @@ function CatalogTab({ project, catalog }) {
         );
       })}
 
-      <div className="cat-insumos">
-        <div className="cat-insumos-head">
+      <div className="cat-insumos-sections">
+        <div className="cat-insumos-head-main">
           <strong>Insumos del proyecto</strong>
-          <div className="cat-insumos-types">
-            {Object.entries(insumosByType).map(([t, n]) => (
-              <span key={t} className={`cat-type cat-type-${t}`}>{typeLbl[t] || t}: <strong>{n}</strong></span>
-            ))}
-          </div>
+          <span className="cat-insumos-meta">{catalog.insumos.length} en total</span>
         </div>
-        <table className="cat-table cat-insumos-table">
-          <thead>
-            <tr>
-              <th>Insumo</th>
-              <th>Tipo</th>
-              <th>Unidad</th>
-              <th className="num">PU</th>
-              <th className="num">Cant. total</th>
-              <th className="num">Monto total</th>
-              <th>Producto Odoo</th>
-            </tr>
-          </thead>
-          <tbody>
-            {catalog.insumos.map(i => (
-              <tr key={i.id}>
-                <td>{i.name}</td>
-                <td><span className={`cat-type cat-type-${i.type}`}>{i.type.toUpperCase()}</span></td>
-                <td className="cat-uom">{i.uom || "—"}</td>
-                <td className="num mono">{_fmtN(i.price_unit, 2)}</td>
-                <td className="num mono">{_fmtN(i.total_qty, 2)}</td>
-                <td className="num mono">{_fmtN(i.total_amount)}</td>
-                <td className="cat-product">{i.odoo_product?.name || (i.linked_item ? <em>desde APU</em> : "—")}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {TYPE_ORDER.map(t => {
+          const list = insumosByType[t];
+          if (list.length === 0) return null;
+          return (
+            <div key={t} className="cat-insumos-section">
+              <div className={`cat-insumos-section-head cat-insumos-section-${t}`}>
+                <span className={`cat-type cat-type-${t}`}>{TYPE_LBL[t]}</span>
+                <span className="cat-insumos-section-count">{list.length} insumos</span>
+                <span className="cat-insumos-section-total mono">Total: {_fmtN(totalsByType[t])} {currency}</span>
+              </div>
+              <table className="cat-table cat-insumos-table">
+                <thead>
+                  <tr>
+                    <th>Insumo</th>
+                    <th>Unidad</th>
+                    <th className="num">PU</th>
+                    <th className="num">Cant. total</th>
+                    <th className="num">Monto total</th>
+                    <th>Producto Odoo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.map(i => (
+                    <tr key={i.id}>
+                      <td>{i.name}</td>
+                      <td className="cat-uom">{i.uom || "—"}</td>
+                      <td className="num mono">{_fmtN(i.price_unit, 2)}</td>
+                      <td className="num mono">{_fmtN(i.total_qty, 2)}</td>
+                      <td className="num mono">{_fmtN(i.total_amount)}</td>
+                      <td className="cat-product">{i.odoo_product?.name || (i.linked_item ? <em>desde APU</em> : "—")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

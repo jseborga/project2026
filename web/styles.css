@@ -2713,3 +2713,66 @@ input, textarea, select { font-family: inherit; font-size: inherit; color: inher
 .cat-type-sub { background: rgba(122, 74, 138, 0.18); color: #5a2f6e; }
 .cat-product { font-size: 11px; color: var(--ink-2); }
 .cat-product em { color: var(--ink-3); font-style: italic; }
+
+/* ── Catalog: items expandibles + insumos por tipo ────────────────────── */
+.cat-expand-cell { width: 24px; padding-right: 0 !important; text-align: center; }
+.cat-row-expandable { cursor: pointer; }
+.cat-row-expandable:hover { background: var(--surface-2); }
+.cat-row-open { background: var(--surface-2); }
+.cat-row-open td { font-weight: 600; }
+
+.cat-lines-row td { padding: 0 !important; background: var(--surface-0); border-bottom: 1px solid var(--border-2) !important; }
+.cat-lines-wrap { padding: 12px 16px 16px; border-left: 3px solid var(--accent); margin-left: 12px; }
+.cat-lines-summary {
+  display: flex; justify-content: space-between; align-items: center; gap: 14px;
+  margin-bottom: 8px; font-size: 11px;
+}
+.cat-lines-title { color: var(--ink-3); font-weight: 500; }
+.cat-lines-sum { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.cat-lines-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.cat-lines-table th {
+  background: transparent;
+  font-size: 9px; padding: 4px 8px;
+  border-bottom: 1px solid var(--border-2);
+}
+.cat-lines-table td {
+  padding: 5px 8px; border-bottom: 1px dashed var(--border-1);
+  vertical-align: middle;
+}
+.cat-lines-table tbody tr:last-child td { border-bottom: none; }
+.cat-lines-table tbody tr:hover { background: var(--surface-1); }
+
+/* Insumos en 4 secciones por tipo */
+.cat-insumos-sections {
+  display: flex; flex-direction: column; gap: 12px;
+}
+.cat-insumos-head-main {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding: 4px 0;
+}
+.cat-insumos-head-main strong { font-size: 14px; color: var(--ink-1); }
+.cat-insumos-meta { font-size: 11px; color: var(--ink-3); }
+
+.cat-insumos-section {
+  background: var(--surface-1); border: 1px solid var(--border-1);
+  border-radius: var(--radius); overflow: hidden;
+}
+.cat-insumos-section-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border-1);
+}
+.cat-insumos-section-count {
+  font-size: 11px; color: var(--ink-3);
+}
+.cat-insumos-section-total {
+  margin-left: auto;
+  font-size: 12px; color: var(--ink-1);
+  font-weight: 600;
+}
+.cat-insumos-section-mat { border-left: 3px solid #5b7a8c; }
+.cat-insumos-section-mo  { border-left: 3px solid #6a8a3a; }
+.cat-insumos-section-eq  { border-left: 3px solid #a06a3a; }
+.cat-insumos-section-sub { border-left: 3px solid #7a4a8a; }
