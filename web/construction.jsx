@@ -193,7 +193,7 @@ function ConstructionView({ tweaks }) {
   const [tab, setTab] = React.useState("items"); // items | wp | matrix
   const [sel, setSel] = React.useState(null);    // {kind:'item'|'wp', id}
   // Estado mutable para drag&drop de paquetes
-  const [pkgs, setPkgs] = React.useState(() => CN_PACKAGES.map(p => ({...p})));
+  const [pkgs, setPkgs] = usePersistedState("cn_packages", () => CN_PACKAGES.map(p => ({...p})));
 
   // Indicadores PM4R / EVM
   const totals = React.useMemo(() => {

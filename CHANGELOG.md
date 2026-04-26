@@ -17,6 +17,20 @@ Todos los cambios notables del proyecto se registran aquí. Formato basado en
   Gantt renderiza 18 barras, las 6 vistas del sidebar cargan. Sin errores en
   consola (solo warning estándar de Babel-in-browser, esperado).
 
+### Changed
+- **Capa de datos**: nueva `web/store.jsx` con `usePersistedState(slot, default)`
+  que lee/escribe en localStorage por slot (`tasks`, `cn_packages`, `tweaks`).
+  Mismo contrato que `useState`, así que cuando se cablee Odoo solo cambian las
+  funciones internas del store — las vistas no.
+- **Gantt**: `tasks` ahora persiste — todo lo que edites (nombres, %, fechas,
+  responsables, dependencias) sobrevive al refresh.
+- **Construcción**: el estado de los paquetes (drag&drop entre columnas del
+  kanban) persiste.
+- **Tweaks**: color de acento, modo oscuro, densidad, zoom Gantt y ruta crítica
+  ahora persisten (antes se perdían al recargar fuera del entorno de diseño).
+- **Panel de tweaks**: nueva sección "Datos" con botón "Restablecer datos
+  locales" que limpia localStorage y recarga.
+
 ## [0.1.0] — 2026-04-26
 
 ### Added

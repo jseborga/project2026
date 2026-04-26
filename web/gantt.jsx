@@ -611,7 +611,7 @@ function AssigneePicker({ current, onPick, onClose }) {
 }
 
 function GanttView({ tweaks }) {
-  const [tasks, setTasks] = React.useState(TASKS);
+  const [tasks, setTasks] = usePersistedState("tasks", TASKS);
   const [zoom, setZoom] = React.useState(tweaks.ganttZoom || "week");
   const [collapsed, setCollapsed] = React.useState({});
   const [selected, setSelected] = React.useState("T11");

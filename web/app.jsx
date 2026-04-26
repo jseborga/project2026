@@ -77,6 +77,14 @@ function App() {
           options={[{ value: "day", label: "Día" }, { value: "week", label: "Sem" }, { value: "month", label: "Mes" }]}
           onChange={(v) => setTweak("ganttZoom", v)} />
         <TweakToggle label="Camino crítico" value={tweaks.showCritical} onChange={(v) => setTweak("showCritical", v)} />
+
+        <TweakSection label="Datos" />
+        <TweakButton label="Restablecer datos locales" secondary onClick={() => {
+          if (window.confirm("¿Borrar todos los cambios locales? Las tareas, paquetes y tweaks vuelven a sus valores por defecto.")) {
+            window.tramoStore.clearAll();
+            window.location.reload();
+          }
+        }} />
       </TweaksPanel>
     </div>
   );
