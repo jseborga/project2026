@@ -11,6 +11,12 @@ Todos los cambios notables del proyecto se registran aquí. Formato basado en
   con Playwright MCP para verificar deploys desde el navegador.
 - `CHANGELOG.md` para llevar registro de avances.
 
+### Verified
+- 2026-04-26: deploy en EasyPanel funcional —
+  https://base-project2026.q8waob.easypanel.host/ responde HTTP 200, React monta,
+  Gantt renderiza 18 barras, las 6 vistas del sidebar cargan. Sin errores en
+  consola (solo warning estándar de Babel-in-browser, esperado).
+
 ## [0.1.0] — 2026-04-26
 
 ### Added
