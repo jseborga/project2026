@@ -79,6 +79,21 @@ project2026/
 Los `.jsx` se cargan en orden desde `index.html`; cada uno define globales
 (componentes y datos) que los siguientes consumen.
 
+## Documentación de avance
+
+Cada cambio notable se registra en [`CHANGELOG.md`](CHANGELOG.md) bajo la sección
+**Unreleased**. Cuando se hace un release/tag, se mueve a su versión.
+
+## Para Claude Code (este repo)
+
+- [`CLAUDE.md`](CLAUDE.md) — contexto que Claude carga automáticamente al abrir el repo.
+- [`.claude/settings.json`](.claude/settings.json) — permisos del proyecto (qué
+  comandos puede correr Claude sin pedir).
+- [`.mcp.json`](.mcp.json) — Playwright MCP. Permite a Claude abrir la URL del
+  deploy y verificar que el sitio funciona. Requiere Node 18+ instalado donde
+  corre Claude Code (`apt install -y nodejs npm`). Al usar el MCP por primera vez,
+  Claude Code te pide aprobarlo.
+
 ## Próximo paso: integración con Odoo 18 CE
 
 El prototipo está pensado para enchufarse a Odoo via su API estándar

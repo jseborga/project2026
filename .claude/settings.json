@@ -1,0 +1,46 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status)",
+      "Bash(git status:*)",
+      "Bash(git diff)",
+      "Bash(git diff:*)",
+      "Bash(git log)",
+      "Bash(git log:*)",
+      "Bash(git show)",
+      "Bash(git show:*)",
+      "Bash(git branch)",
+      "Bash(git branch:*)",
+      "Bash(git remote)",
+      "Bash(git remote:*)",
+      "Bash(git ls-remote:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)",
+      "Bash(git push origin main)",
+      "Bash(git fetch)",
+      "Bash(git fetch:*)",
+      "Bash(git pull)",
+      "Bash(git pull:*)",
+      "Bash(curl -sS:*)",
+      "Bash(curl -I:*)",
+      "Bash(./serve.sh)",
+      "Bash(PORT=*:./serve.sh)",
+      "Bash(docker build:*)",
+      "Bash(docker run:*)",
+      "Bash(docker ps)",
+      "Bash(docker images)",
+      "Bash(node --version)",
+      "Bash(npm --version)",
+      "Bash(npx -y @playwright/mcp:*)",
+      "Bash(ls:*)",
+      "Bash(wc:*)",
+      "Bash(cat /home/coder/project2026/CHANGELOG.md)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(rm -rf:*)"
+    ]
+  }
+}
