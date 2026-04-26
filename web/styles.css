@@ -2922,3 +2922,168 @@ input, textarea, select { font-family: inherit; font-size: inherit; color: inher
 .plan-legend-bar.plan-bar-group { background: var(--ink-2); height: 4px; }
 .plan-legend-mile { color: var(--accent); font-size: 13px; }
 .plan-legend-meta { margin-left: auto; color: var(--ink-3); }
+
+/* ── Plan editing (Fase 4) ──────────────────────────────────────────── */
+.plan-state-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border-radius: var(--radius);
+  font-size: 12px; font-weight: 600;
+  white-space: nowrap;
+}
+.plan-state-badge > span:first-child { font-size: 13px; }
+.plan-state-draft     { background: rgba(106,138,58,0.15); color: #4d6a26; }
+.plan-state-baseline  { background: var(--accent-bg); color: var(--accent-fg); }
+.plan-state-approved  { background: rgba(91,122,140,0.18); color: #3b5e72; }
+.plan-state-execution { background: rgba(160,106,58,0.18); color: #6e4520; }
+.plan-state-closed    { background: var(--surface-3); color: var(--ink-3); }
+
+.plan-unlock-btn {
+  background: var(--surface-2); border: 1px solid var(--border-2);
+  color: var(--ink-1); font-size: 11px; font-weight: 600;
+  padding: 5px 10px; border-radius: var(--radius);
+}
+.plan-unlock-btn:hover:not(:disabled) { background: var(--surface-3); }
+.plan-unlock-btn:disabled { opacity: 0.5; cursor: wait; }
+
+.plan-bar-editable { cursor: grab; }
+.plan-bar-editable:active { cursor: grabbing; }
+.plan-bar-dragging { opacity: 0.7; outline: 2px dashed white; outline-offset: 2px; }
+
+.plan-bar-resize {
+  position: absolute; right: -3px; top: 0; bottom: 0;
+  width: 8px; cursor: ew-resize; background: transparent;
+}
+.plan-bar-resize::after {
+  content: ""; position: absolute;
+  right: 2px; top: 4px; bottom: 4px;
+  width: 2px; background: rgba(255,255,255,0.5); border-radius: 1px;
+}
+.plan-bar:hover .plan-bar-resize::after { background: rgba(255,255,255,0.9); }
+
+.plan-bar-progress {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: rgba(255,255,255,0.25);
+  border-radius: 3px 0 0 3px;
+  pointer-events: none;
+}
+
+.plan-progress {
+  background: rgba(106,138,58,0.18); color: #4d6a26;
+  font-size: 9px; padding: 1px 4px; border-radius: 3px;
+}
+.plan-pill-done { background: rgba(91,122,140,0.18); color: #3b5e72; }
+
+.plan-name-input {
+  flex: 1; min-width: 0;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 12px;
+  background: var(--surface-1); color: var(--ink-1);
+  outline: none;
+}
+
+/* Context menu */
+.plan-ctx-menu {
+  position: fixed; z-index: 1000;
+  background: var(--surface-1);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  padding: 6px;
+  min-width: 220px;
+}
+.plan-ctx-header {
+  padding: 6px 10px 8px; border-bottom: 1px solid var(--border-1);
+  font-size: 11px; font-weight: 600; color: var(--ink-2);
+  margin-bottom: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.plan-ctx-item {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 6px 10px;
+  background: transparent; border: none;
+  font-size: 12px; color: var(--ink-1); text-align: left;
+  border-radius: 4px;
+}
+.plan-ctx-item:hover { background: var(--surface-2); }
+.plan-ctx-icon { display: inline-block; width: 16px; text-align: center; opacity: 0.85; }
+.plan-ctx-sep { height: 1px; background: var(--border-1); margin: 4px 8px; }
+
+/* Dialog */
+.plan-dialog-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(20,16,12,0.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 999;
+  animation: fadeIn 0.12s ease-out;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.plan-dialog {
+  background: var(--surface-1);
+  border-radius: var(--radius-lg);
+  width: 92%; max-width: 520px;
+  max-height: 86vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  overflow: hidden;
+}
+.plan-dialog-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 16px 18px 12px; border-bottom: 1px solid var(--border-1);
+  gap: 12px;
+}
+.plan-dialog-title { font-size: 14px; font-weight: 600; color: var(--ink-1); }
+.plan-dialog-sub { font-size: 11px; color: var(--ink-3); margin-top: 2px; }
+.plan-dialog-close {
+  background: transparent; border: none; padding: 4px 8px;
+  font-size: 16px; color: var(--ink-3); cursor: pointer;
+}
+.plan-dialog-close:hover { color: var(--ink-1); }
+
+.plan-dialog-tabs { display: flex; padding: 0 18px; border-bottom: 1px solid var(--border-1); gap: 4px; }
+.plan-dialog-tab {
+  background: transparent; border: none;
+  padding: 8px 14px; font-size: 12px; font-weight: 500;
+  color: var(--ink-2);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.plan-dialog-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.plan-dialog-body {
+  padding: 16px 18px;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.plan-dialog-note {
+  background: var(--accent-bg); color: var(--accent-fg);
+  font-size: 11px; padding: 8px 10px; border-radius: var(--radius);
+  border: 1px solid rgba(184,92,56,0.18);
+}
+.plan-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.plan-field > span { color: var(--ink-2); font-weight: 500; }
+.plan-field-input { display: flex; align-items: center; gap: 8px; }
+.plan-field-input > input[type=text],
+.plan-field-input > input[type=number],
+.plan-field-input > input[type=date],
+.plan-field input:not([type]) {
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  padding: 6px 8px; font-size: 13px;
+  background: var(--surface-0);
+  flex: 1;
+}
+.plan-field input:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+.plan-field input:disabled { background: var(--surface-2); color: var(--ink-3); }
+.plan-field small { color: var(--ink-3); font-size: 10px; }
+
+.plan-dialog-foot {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 12px 18px; border-top: 1px solid var(--border-1);
+  background: var(--surface-0);
+}

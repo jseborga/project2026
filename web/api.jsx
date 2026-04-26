@@ -55,6 +55,11 @@ const api = {
   getProject: (id) => apiFetch(`/projects/${id}`),
   getCatalog: (id) => apiFetch(`/projects/${id}/catalog`),
   getPlan: (id) => apiFetch(`/projects/${id}/plan`),
+  updatePlanLine: (projectId, lineId, patch) => apiFetch(`/projects/${projectId}/plan/lines/${lineId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  }),
+  unlockPlan: (projectId) => apiFetch(`/projects/${projectId}/plan/unlock`, { method: "POST" }),
 };
 
 window.tramoApi = api;

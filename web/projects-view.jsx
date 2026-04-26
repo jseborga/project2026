@@ -469,18 +469,53 @@ function CatalogTab({ project, catalog }) {
   );
 }
 
-// ── PlanTab (Gantt read-only contra apu.project.plan) ───────────────────
+// ── PlanTab (Gantt editable contra apu.project.plan) ───────────────────
 
 const DAY_W = 24;       // px por día generico
-const NAME_COL_W = 320; // px columna nombres
+const NAME_COL_W = 360; // px columna nombres
 
-function PlanTab({ project, plan: planData }) {
-  const { plan, lines, links } = planData;
-  const [collapsed, setCollapsed] = React.useState({}); // {parent_id: bool}
+const STATE_META = {
+  draft:     { label: "Borrador",      icon: "✏️", cls: "plan-state-draft",     desc: "Editable por completo" },
+  baseline:  { label: "Línea base",    icon: "🔒", cls: "plan-state-baseline",  desc: "Solo se reportan avance y fechas reales" },
+  approved:  { label: "Aprobado",      icon: "✓",  cls: "plan-state-approved",  desc: "Solo se reportan avance y fechas reales" },
+  execution: { label: "En ejecución",  icon: "▶",  cls: "plan-state-execution", desc: "Solo se reportan avance y fechas reales" },
+  closed:    { label: "Cerrado",       icon: "⛔", cls: "plan-state-closed",    desc: "Solo lectura" },
+};
 
-  // Visibles según colapso de padres
+function canEditStructure(state) { return state === "draft"; }
+function canEditActuals(state) { return state !== "closed"; }
+
+
+function PlanTab({ project, plan: planData, onReload }) {
+  const { plan, links } = planData;
+  const [lines, setLines] = React.useState(planData.lines);
+  const [collapsed, setCollapsed] = React.useState({});
+  const [editing, setEditing] = React.useState(null); // {lineId, field}
+  const [ctxMenu, setCtxMenu] = React.useState(null); // {x, y, line}
+  const [dialogLine, setDialogLine] = React.useState(null);
+  const [error, setError] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+
+  React.useEffect(() => { setLines(planData.lines); }, [planData.lines]);
+
+  const editStructure = canEditStructure(plan.state);
+
+  // Optimistic update + sync
+  const updateLine = React.useCallback(async (lineId, patch) => {
+    const before = lines.find(l => l.id === lineId);
+    setLines(curr => curr.map(l => l.id === lineId ? { ...l, ...patch } : l));
+    setBusy(true); setError(null);
+    try {
+      await window.tramoApi.updatePlanLine(project.id, lineId, patch);
+    } catch (e) {
+      setError(e.message);
+      setLines(curr => curr.map(l => l.id === lineId ? before : l));
+    } finally {
+      setBusy(false);
+    }
+  }, [lines, project.id]);
+
   const visible = React.useMemo(() => {
-    const result = [];
     const isHidden = (line) => {
       let cur = line.parent_id;
       while (cur) {
@@ -490,19 +525,16 @@ function PlanTab({ project, plan: planData }) {
       }
       return false;
     };
-    lines.forEach(ln => { if (!isHidden(ln)) result.push(ln); });
-    return result;
+    return lines.filter(ln => !isHidden(ln));
   }, [lines, collapsed]);
 
-  // Rango horizontal: de día 1 al máximo finish_day
   const maxDay = lines.reduce((m, l) => Math.max(m, l.generic_finish_day || 0), 8);
-  const totalDays = Math.max(maxDay, 14);
+  const totalDays = Math.max(maxDay + 2, 14);
   const linksByTo = React.useMemo(() => {
     const m = {};
     links.forEach(l => { (m[l.to_line] = m[l.to_line] || []).push(l); });
     return m;
   }, [links]);
-
   const childCount = React.useMemo(() => {
     const m = {};
     lines.forEach(l => { if (l.parent_id) m[l.parent_id] = (m[l.parent_id] || 0) + 1; });
@@ -511,10 +543,11 @@ function PlanTab({ project, plan: planData }) {
 
   return (
     <div className="plan-tab">
-      <PlanHeaderBar plan={plan} />
+      <PlanHeaderBar plan={plan} project={project} onReload={onReload} busy={busy} />
+
+      {error && <div className="proj-error">⚠ {error}</div>}
 
       <div className="plan-gantt">
-        {/* Header timeline */}
         <div className="plan-grid plan-grid-head" style={{gridTemplateColumns: `${NAME_COL_W}px 1fr`}}>
           <div className="plan-name-head">Actividad / agrupador</div>
           <div className="plan-tl-head" style={{minWidth: totalDays * DAY_W}}>
@@ -526,69 +559,33 @@ function PlanTab({ project, plan: planData }) {
           </div>
         </div>
 
-        {/* Filas */}
         <div className="plan-grid-body">
-          {visible.map(ln => {
-            const isGroup = (childCount[ln.id] || 0) > 0;
-            const isCollapsed = !!collapsed[ln.id];
-            const lvl = (ln.level || 1) - 1;
-            const barLeft = (Math.max(1, ln.generic_start_day) - 1) * DAY_W;
-            const barWidth = Math.max(1, (ln.generic_finish_day - ln.generic_start_day + 1)) * DAY_W;
-            const isMilestone = (ln.duration_days || 0) === 0 || ln.milestone_category;
-            const preds = linksByTo[ln.id] || [];
-            return (
-              <div key={ln.id} className="plan-grid plan-grid-row" style={{gridTemplateColumns: `${NAME_COL_W}px 1fr`}}>
-                <div className={"plan-name" + (isGroup ? " plan-name-group" : "") + (ln.is_critical ? " plan-name-critical" : "")}
-                     style={{paddingLeft: 8 + lvl * 14}}>
-                  {isGroup ? (
-                    <button className="plan-chevron" onClick={() => setCollapsed(c => ({...c, [ln.id]: !c[ln.id]}))}>
-                      <Icon name="chevronR" size={11} style={{transform: isCollapsed ? "none" : "rotate(90deg)", transition:"transform .15s"}} />
-                    </button>
-                  ) : (
-                    <span className="plan-chevron-spacer" />
-                  )}
-                  <span className="plan-name-text" title={ln.name}>{ln.code && <span className="plan-code">{ln.code}</span>}{ln.name}</span>
-                  <span className="plan-name-meta">
-                    {ln.duration_days > 0 && <span>{ln.duration_days}d</span>}
-                    {ln.is_critical && <span className="plan-pill plan-pill-crit">crítica</span>}
-                    {ln.actual_start && <span className="plan-pill plan-pill-real">en curso</span>}
-                  </span>
-                </div>
-                <div className="plan-tl-row" style={{minWidth: totalDays * DAY_W}}>
-                  {/* Líneas de grilla semana */}
-                  {Array.from({length: totalDays}, (_, i) => i + 1).map(d => (
-                    d % 7 === 1 ? <div key={d} className="plan-week-line" style={{left: (d-1)*DAY_W}} /> : null
-                  ))}
-                  {isMilestone ? (
-                    <div className={"plan-milestone" + (ln.is_critical ? " critical" : "")}
-                         style={{left: barLeft - 6}}
-                         title={`${ln.name} · día ${ln.generic_start_day}`}>◆</div>
-                  ) : (
-                    <div className={"plan-bar"
-                                  + (isGroup ? " plan-bar-group" : "")
-                                  + (ln.is_critical ? " plan-bar-critical" : "")}
-                         style={{left: barLeft, width: barWidth}}
-                         title={`${ln.name}\n${ln.duration_days}d · días ${ln.generic_start_day}-${ln.generic_finish_day}${ln.is_critical?" · CRÍTICA":""}`}>
-                      <span className="plan-bar-label">{ln.duration_days}d</span>
-                    </div>
-                  )}
-                  {/* Flechitas de dependencia (FS simple) */}
-                  {preds.map(link => {
-                    const from = lines.find(l => l.id === link.from_line);
-                    if (!from) return null;
-                    const fromX = (from.generic_finish_day) * DAY_W;
-                    const toX = barLeft;
-                    if (toX < fromX) return null;
-                    return (
-                      <div key={link.id} className="plan-arrow"
-                           style={{left: Math.min(fromX, toX), width: Math.abs(toX - fromX)}}
-                           title={`${link.type.toUpperCase()} lag ${link.lag_days}d`} />
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+          {visible.map(ln => (
+            <PlanRow
+              key={ln.id}
+              line={ln}
+              isGroup={(childCount[ln.id] || 0) > 0}
+              collapsed={!!collapsed[ln.id]}
+              onToggleCollapse={() => setCollapsed(c => ({...c, [ln.id]: !c[ln.id]}))}
+              totalDays={totalDays}
+              lines={lines}
+              linksByTo={linksByTo}
+              editStructure={editStructure}
+              editing={editing}
+              onStartEdit={(field) => editStructure && setEditing({ lineId: ln.id, field })}
+              onCancelEdit={() => setEditing(null)}
+              onCommitEdit={async (patch) => {
+                setEditing(null);
+                await updateLine(ln.id, patch);
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setCtxMenu({ x: e.clientX, y: e.clientY, line: ln });
+              }}
+              onOpenDialog={() => setDialogLine(ln)}
+              onDragCommit={async (patch) => updateLine(ln.id, patch)}
+            />
+          ))}
         </div>
       </div>
 
@@ -597,13 +594,378 @@ function PlanTab({ project, plan: planData }) {
         <span><span className="plan-legend-bar plan-bar-critical" /> Crítica</span>
         <span><span className="plan-legend-bar plan-bar-group" /> Grupo</span>
         <span><span className="plan-legend-mile">◆</span> Hito</span>
-        <span className="plan-legend-meta">{plan.crew_count} cuadrillas · período de control: {plan.control_period_mode || "—"}</span>
+        <span className="plan-legend-meta">
+          {editStructure
+            ? "✏️ Editable: doble click en nombre o arrastra las barras. Click derecho para más opciones."
+            : "🔒 Estructura bloqueada — solo se editan avance y fechas reales (click derecho o doble click)."}
+        </span>
+      </div>
+
+      {ctxMenu && (
+        <PlanContextMenu
+          x={ctxMenu.x} y={ctxMenu.y} line={ctxMenu.line}
+          editStructure={editStructure}
+          canActuals={canEditActuals(plan.state)}
+          onClose={() => setCtxMenu(null)}
+          onAction={(action) => {
+            const ln = ctxMenu.line;
+            setCtxMenu(null);
+            if (action === "props") setDialogLine(ln);
+            else if (action === "rename") setEditing({ lineId: ln.id, field: "name" });
+            else if (action === "today_start") updateLine(ln.id, { actual_start: new Date().toISOString().slice(0,10) });
+            else if (action === "today_finish") updateLine(ln.id, { actual_finish: new Date().toISOString().slice(0,10), progress_pct: 100 });
+            else if (action === "clear_actuals") updateLine(ln.id, { actual_start: "", actual_finish: "", progress_pct: 0 });
+          }}
+        />
+      )}
+
+      {dialogLine && (
+        <PlanPropsDialog
+          line={dialogLine}
+          plan={plan}
+          editStructure={editStructure}
+          canActuals={canEditActuals(plan.state)}
+          onClose={() => setDialogLine(null)}
+          onSave={async (patch) => {
+            await updateLine(dialogLine.id, patch);
+            setDialogLine(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+
+function PlanRow({ line: ln, isGroup, collapsed, onToggleCollapse, totalDays, lines, linksByTo, editStructure, editing, onStartEdit, onCancelEdit, onCommitEdit, onContextMenu, onOpenDialog, onDragCommit }) {
+  const lvl = (ln.level || 1) - 1;
+  const isMilestone = (ln.duration_days || 0) === 0 || ln.milestone_category;
+  const preds = linksByTo[ln.id] || [];
+  const isEditingName = editing?.lineId === ln.id && editing?.field === "name";
+
+  // Drag/resize state
+  const [drag, setDrag] = React.useState(null); // { mode:'move'|'resize', startX, origStart, origDur }
+  const liveStart = drag?.previewStart ?? ln.generic_start_day;
+  const liveDur = drag?.previewDur ?? ln.duration_days;
+  const barLeft = (Math.max(1, liveStart) - 1) * DAY_W;
+  const barWidth = Math.max(1, liveDur || (ln.generic_finish_day - liveStart + 1)) * DAY_W;
+
+  React.useEffect(() => {
+    if (!drag) return;
+    const onMove = (e) => {
+      const dxDays = Math.round((e.clientX - drag.startX) / DAY_W);
+      if (drag.mode === "move") {
+        const newStart = Math.max(1, drag.origStart + dxDays);
+        setDrag(d => ({ ...d, previewStart: newStart }));
+      } else if (drag.mode === "resize") {
+        const newDur = Math.max(1, drag.origDur + dxDays);
+        setDrag(d => ({ ...d, previewDur: newDur }));
+      }
+    };
+    const onUp = async () => {
+      const moved = (drag.previewStart != null && drag.previewStart !== drag.origStart) ||
+                    (drag.previewDur != null && drag.previewDur !== drag.origDur);
+      if (moved) {
+        if (drag.mode === "move") {
+          const ns = drag.previewStart;
+          await onDragCommit({ generic_start_day: ns, generic_finish_day: ns + ln.duration_days - 1 });
+        } else {
+          const nd = drag.previewDur;
+          await onDragCommit({ duration_days: nd, generic_finish_day: ln.generic_start_day + nd - 1 });
+        }
+      }
+      setDrag(null);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+  }, [drag, ln, onDragCommit]);
+
+  const startDrag = (mode, e) => {
+    if (!editStructure || isGroup || isMilestone) return;
+    e.stopPropagation();
+    setDrag({
+      mode,
+      startX: e.clientX,
+      origStart: ln.generic_start_day,
+      origDur: ln.duration_days,
+    });
+  };
+
+  return (
+    <div className="plan-grid plan-grid-row" style={{gridTemplateColumns: `${NAME_COL_W}px 1fr`}} onContextMenu={onContextMenu}>
+      <div className={"plan-name" + (isGroup ? " plan-name-group" : "") + (ln.is_critical ? " plan-name-critical" : "")}
+           style={{paddingLeft: 8 + lvl * 14}}>
+        {isGroup ? (
+          <button className="plan-chevron" onClick={onToggleCollapse}>
+            <Icon name="chevronR" size={11} style={{transform: collapsed ? "none" : "rotate(90deg)", transition:"transform .15s"}} />
+          </button>
+        ) : (
+          <span className="plan-chevron-spacer" />
+        )}
+        {isEditingName ? (
+          <InlineNameEdit value={ln.name} onCommit={(v) => onCommitEdit({ name: v })} onCancel={onCancelEdit} />
+        ) : (
+          <span
+            className="plan-name-text"
+            onDoubleClick={() => editStructure && onStartEdit("name")}
+            title={editStructure ? "Doble click para renombrar" : ln.name}
+          >
+            {ln.code && <span className="plan-code">{ln.code}</span>}{ln.name}
+          </span>
+        )}
+        <span className="plan-name-meta">
+          {ln.progress_pct > 0 && <span className="plan-progress mono">{ln.progress_pct.toFixed(0)}%</span>}
+          {ln.duration_days > 0 && <span>{ln.duration_days}d</span>}
+          {ln.is_critical && <span className="plan-pill plan-pill-crit">crítica</span>}
+          {ln.actual_start && !ln.actual_finish && <span className="plan-pill plan-pill-real">en curso</span>}
+          {ln.actual_finish && <span className="plan-pill plan-pill-done">terminada</span>}
+        </span>
+      </div>
+      <div className="plan-tl-row" style={{minWidth: totalDays * DAY_W}}>
+        {Array.from({length: totalDays}, (_, i) => i + 1).map(d => (
+          d % 7 === 1 ? <div key={d} className="plan-week-line" style={{left: (d-1)*DAY_W}} /> : null
+        ))}
+        {isMilestone ? (
+          <div className={"plan-milestone" + (ln.is_critical ? " critical" : "")}
+               style={{left: barLeft - 6}}
+               onContextMenu={onContextMenu}
+               onDoubleClick={onOpenDialog}
+               title={`${ln.name} · día ${ln.generic_start_day}`}>◆</div>
+        ) : (
+          <div className={"plan-bar"
+                        + (isGroup ? " plan-bar-group" : "")
+                        + (ln.is_critical ? " plan-bar-critical" : "")
+                        + (drag ? " plan-bar-dragging" : "")
+                        + (editStructure && !isGroup ? " plan-bar-editable" : "")}
+               style={{left: barLeft, width: barWidth}}
+               onMouseDown={(e) => startDrag("move", e)}
+               onContextMenu={onContextMenu}
+               onDoubleClick={onOpenDialog}
+               title={`${ln.name}\n${ln.duration_days}d · días ${ln.generic_start_day}-${ln.generic_finish_day}${editStructure?"\nArrastra para mover · Doble click para propiedades":""}`}>
+            {/* Progress overlay */}
+            {ln.progress_pct > 0 && (
+              <div className="plan-bar-progress" style={{width: `${Math.min(100, ln.progress_pct)}%`}} />
+            )}
+            <span className="plan-bar-label">{liveDur}d</span>
+            {editStructure && !isGroup && (
+              <div className="plan-bar-resize" onMouseDown={(e) => startDrag("resize", e)} title="Arrastra para redimensionar" />
+            )}
+          </div>
+        )}
+        {preds.map(link => {
+          const from = lines.find(l => l.id === link.from_line);
+          if (!from) return null;
+          const fromX = (from.generic_finish_day) * DAY_W;
+          const toX = barLeft;
+          if (toX < fromX) return null;
+          return (
+            <div key={link.id} className="plan-arrow"
+                 style={{left: Math.min(fromX, toX), width: Math.abs(toX - fromX)}}
+                 title={`${link.type.toUpperCase()} lag ${link.lag_days}d`} />
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function PlanHeaderBar({ plan }) {
+
+function InlineNameEdit({ value, onCommit, onCancel }) {
+  const [v, setV] = React.useState(value);
+  const ref = React.useRef(null);
+  React.useEffect(() => { ref.current?.focus(); ref.current?.select(); }, []);
+  const submit = () => v !== value ? onCommit(v) : onCancel();
+  return (
+    <input
+      ref={ref}
+      className="plan-name-input"
+      value={v}
+      onChange={(e) => setV(e.target.value)}
+      onBlur={submit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") submit();
+        else if (e.key === "Escape") onCancel();
+      }}
+    />
+  );
+}
+
+
+function PlanContextMenu({ x, y, line, editStructure, canActuals, onClose, onAction }) {
+  React.useEffect(() => {
+    const close = () => onClose();
+    setTimeout(() => {
+      window.addEventListener("click", close);
+      window.addEventListener("contextmenu", close);
+    }, 0);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("contextmenu", close);
+    };
+  }, [onClose]);
+
+  const items = [
+    { label: "Información…", icon: "📋", action: "props" },
+    { type: "sep" },
+    ...(editStructure ? [{ label: "Renombrar", icon: "✏️", action: "rename" }] : []),
+    ...(canActuals ? [
+      { label: "Marcar inicio real (hoy)", icon: "▶", action: "today_start" },
+      { label: "Marcar terminada (hoy)", icon: "✓", action: "today_finish" },
+      { type: "sep" },
+      { label: "Limpiar fechas reales", icon: "↺", action: "clear_actuals" },
+    ] : []),
+  ];
+
+  // Posición evitando salir de viewport
+  const menuW = 220, menuH = items.length * 28 + 16;
+  const left = Math.min(x, window.innerWidth - menuW - 8);
+  const top = Math.min(y, window.innerHeight - menuH - 8);
+
+  return (
+    <div className="plan-ctx-menu" style={{left, top}} onClick={(e) => e.stopPropagation()} onContextMenu={(e) => e.preventDefault()}>
+      <div className="plan-ctx-header">{line.name}</div>
+      {items.map((it, i) => it.type === "sep" ? (
+        <div key={i} className="plan-ctx-sep" />
+      ) : (
+        <button key={i} className="plan-ctx-item" onClick={() => onAction(it.action)}>
+          <span className="plan-ctx-icon">{it.icon}</span> {it.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+
+function PlanPropsDialog({ line, plan, editStructure, canActuals, onClose, onSave }) {
+  const [tab, setTab] = React.useState(editStructure ? "general" : "exec");
+  const [form, setForm] = React.useState({
+    name: line.name,
+    code: line.code || "",
+    duration_days: line.duration_days,
+    generic_start_day: line.generic_start_day,
+    progress_pct: line.progress_pct,
+    actual_start: line.actual_start || "",
+    actual_finish: line.actual_finish || "",
+  });
+  const [saving, setSaving] = React.useState(false);
+
+  const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
+  const setNum = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value === "" ? "" : Number(e.target.value) }));
+
+  const save = async () => {
+    setSaving(true);
+    const patch = {};
+    if (editStructure) {
+      if (form.name !== line.name) patch.name = form.name;
+      if (form.code !== (line.code || "")) patch.code = form.code;
+      if (Number(form.duration_days) !== line.duration_days) patch.duration_days = Number(form.duration_days);
+      if (Number(form.generic_start_day) !== line.generic_start_day) {
+        patch.generic_start_day = Number(form.generic_start_day);
+        patch.generic_finish_day = Number(form.generic_start_day) + Number(form.duration_days) - 1;
+      }
+    }
+    if (canActuals) {
+      if (Number(form.progress_pct) !== line.progress_pct) patch.progress_pct = Number(form.progress_pct);
+      if (form.actual_start !== (line.actual_start || "")) patch.actual_start = form.actual_start;
+      if (form.actual_finish !== (line.actual_finish || "")) patch.actual_finish = form.actual_finish;
+    }
+    if (Object.keys(patch).length === 0) { onClose(); return; }
+    try { await onSave(patch); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="plan-dialog-backdrop" onClick={onClose}>
+      <div className="plan-dialog" onClick={(e) => e.stopPropagation()}>
+        <div className="plan-dialog-head">
+          <div>
+            <div className="plan-dialog-title">{line.name}</div>
+            <div className="plan-dialog-sub">Línea #{line.id} · {plan.name}</div>
+          </div>
+          <button className="plan-dialog-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="plan-dialog-tabs">
+          <button className={"plan-dialog-tab" + (tab === "general" ? " active" : "")} onClick={() => setTab("general")}>General</button>
+          <button className={"plan-dialog-tab" + (tab === "exec" ? " active" : "")} onClick={() => setTab("exec")}>Ejecución</button>
+        </div>
+
+        {tab === "general" && (
+          <div className="plan-dialog-body">
+            {!editStructure && <div className="plan-dialog-note">Plan en estado <strong>{STATE_META[plan.state]?.label}</strong> — solo lectura. Desbloqueá para editar.</div>}
+            <Field label="Nombre">
+              <input value={form.name} onChange={set("name")} disabled={!editStructure} />
+            </Field>
+            <Field label="Código">
+              <input value={form.code} onChange={set("code")} disabled={!editStructure} />
+            </Field>
+            <Field label="Duración (días)">
+              <input type="number" min="0" value={form.duration_days} onChange={setNum("duration_days")} disabled={!editStructure} />
+            </Field>
+            <Field label="Día de inicio (relativo)">
+              <input type="number" min="1" value={form.generic_start_day} onChange={setNum("generic_start_day")} disabled={!editStructure} />
+            </Field>
+            <Field label="Crítica">
+              <input type="checkbox" checked={!!line.is_critical} disabled readOnly />
+              <small>Calculado por Odoo según CPM</small>
+            </Field>
+          </div>
+        )}
+
+        {tab === "exec" && (
+          <div className="plan-dialog-body">
+            <Field label="Avance (%)">
+              <input type="number" min="0" max="100" step="1" value={form.progress_pct} onChange={setNum("progress_pct")} disabled={!canActuals} />
+            </Field>
+            <Field label="Inicio real">
+              <input type="date" value={form.actual_start} onChange={set("actual_start")} disabled={!canActuals} />
+            </Field>
+            <Field label="Fin real">
+              <input type="date" value={form.actual_finish} onChange={set("actual_finish")} disabled={!canActuals} />
+            </Field>
+            {!canActuals && <div className="plan-dialog-note">Plan cerrado — solo lectura.</div>}
+          </div>
+        )}
+
+        <div className="plan-dialog-foot">
+          <button className="btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+          <button className="btn-primary" onClick={save} disabled={saving}>
+            {saving ? "Guardando…" : "Guardar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <label className="plan-field">
+      <span>{label}</span>
+      <div className="plan-field-input">{children}</div>
+    </label>
+  );
+}
+
+
+function PlanHeaderBar({ plan, project, onReload, busy }) {
+  const meta = STATE_META[plan.state] || STATE_META.draft;
+  const canUnlock = plan.state !== "draft" && plan.state !== "closed";
+  const [unlocking, setUnlocking] = React.useState(false);
+
+  const unlock = async () => {
+    if (!window.confirm(`Esto vuelve el plan a estado Borrador (state='draft') en Odoo, permitiendo editar dates/duración. La baseline sigue registrada pero queda destrabada.\n\n¿Continuar?`)) return;
+    setUnlocking(true);
+    try {
+      await window.tramoApi.unlockPlan(project.id);
+      onReload?.();
+    } catch (e) {
+      alert(`No se pudo desbloquear: ${e.message}`);
+    } finally {
+      setUnlocking(false);
+    }
+  };
+
   return (
     <div className="plan-header">
       <div className="plan-header-main">
@@ -616,13 +978,13 @@ function PlanHeaderBar({ plan }) {
         <div><span>Readiness</span><strong className="mono">{plan.execution_readiness_pct.toFixed(1)}%</strong></div>
         <div><span>Earned</span><strong className="mono">{_fmtN(plan.earned_amount)} {plan.currency?.name||""}</strong></div>
       </div>
-      {plan.baseline_locked && (
-        <div className="plan-lock" title={`Línea base congelada por ${plan.baseline_locked_by?.name || "—"} el ${plan.baseline_locked_at || ""}`}>
-          🔒 Línea base congelada
-          <button className="plan-lock-btn" onClick={() => alert("La edición y desbloqueo de baseline llegan en fase 4")}>
-            Desbloquear
-          </button>
-        </div>
+      <div className={"plan-state-badge " + meta.cls} title={meta.desc}>
+        <span>{meta.icon}</span> {meta.label}
+      </div>
+      {canUnlock && (
+        <button className="plan-unlock-btn" onClick={unlock} disabled={unlocking || busy} title="Volver a borrador para editar la estructura">
+          {unlocking ? "…" : "Desbloquear"}
+        </button>
       )}
     </div>
   );
@@ -649,13 +1011,17 @@ function ProjectDetailView({ project, onBack }) {
   }, [project.id]);
 
   // Plan: lazy cuando se entra al tab Plan
+  const loadPlan = React.useCallback(() => {
+    setPlanError(null);
+    setPlanData(null);
+    window.tramoApi.getPlan(project.id)
+      .then(p => setPlanData(p))
+      .catch(e => setPlanError(e));
+  }, [project.id]);
+
   React.useEffect(() => {
     if (tab !== "plan" || planData || planError) return;
-    let cancel = false;
-    window.tramoApi.getPlan(project.id)
-      .then(p => { if (!cancel) setPlanData(p); })
-      .catch(e => { if (!cancel) setPlanError(e); });
-    return () => { cancel = true; };
+    loadPlan();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, project.id]);
 
@@ -705,7 +1071,7 @@ function ProjectDetailView({ project, onBack }) {
             </div>
           )}
           {!planData && !planError && <div className="proj-loading">Cargando plan…</div>}
-          {planData && <PlanTab project={project} plan={planData} />}
+          {planData && <PlanTab project={project} plan={planData} onReload={loadPlan} />}
         </>
       )}
     </div>
