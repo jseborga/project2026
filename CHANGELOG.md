@@ -62,6 +62,32 @@ Todos los cambios notables del proyecto se registran aquí. Formato basado en
   13 líneas (3 grupos + 10 actividades), 9 dependencias, 2 críticas,
   baseline lockeada el 2026-04-14.
 
+### Fase 4 ✅ — Edición del plan (state-aware)
+- Gateway:
+  - `PATCH /projects/{id}/plan/lines/{line_id}` — actualiza name, code,
+    duration_days, generic_start/finish_day, progress_pct, actual_start,
+    actual_finish. Filtra según state-machine de `apu.project.plan`:
+    state=draft permite todo; baseline/approved/execution permiten solo
+    "actuals" (progress_pct, actual_start, actual_finish); closed → 409.
+  - `POST /projects/{id}/plan/unlock` — escape hatch que escribe
+    `state='draft'` (Odoo no expone botón estándar para esto).
+  - `GET /plan` ahora incluye `state` y `progress_pct`.
+  - 8 tests nuevos (23 totales en gateway).
+- Frontend:
+  - PlanHeaderBar reemplaza el badge de "lock" con un **state badge**
+    (Borrador / Línea base / Aprobado / En ejecución / Cerrado) con icono
+    y tooltip. Botón Desbloquear (con confirmación) cuando state ≠ draft.
+  - Drag horizontal de barras → mueve `generic_start_day`. Solo en draft.
+  - Drag del borde derecho → cambia `duration_days`. Solo en draft.
+  - Doble click en nombre → input editable inline. Solo en draft.
+  - Click derecho en barra/fila → menú contextual con Información,
+    Renombrar, Marcar inicio real (hoy), Marcar terminada, Limpiar fechas.
+  - Doble click en barra → dialog modal con tabs General + Ejecución.
+    Ejecución permite editar avance + fechas reales incluso con baseline.
+  - Updates optimistas con revert si la API falla.
+  - Pills nuevos: "{N}%" (progreso), "en curso", "terminada".
+  - Overlay de progreso visual sobre cada barra.
+
 ### Architecture
 - **Decisión 2026-04-26**: integración con Odoo via gateway FastAPI separado
   (repo paralelo `project2026-api`), no más deferred. Modelo de eventos hacia
