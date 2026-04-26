@@ -22,6 +22,23 @@ Todos los cambios notables del proyecto se registran aquí. Formato basado en
 - **Fase 1 ✅**: `GET /projects` y `GET /projects/{id}` con filtro
   multi-empresa, búsqueda por nombre, paginación. 8 tests verdes,
   verificado end-to-end contra Odoo real (4 empresas, multi-tenancy ok).
+- **Fase 1.5 ✅**: `POST /auth/switch_company` para cambiar empresa activa
+  sin pedir credenciales. `cookie_samesite=none` (con secure) — necesario
+  para que la cookie viaje cross-subdomain frontend ↔ gateway.
+- **Fase 2 ✅**: `GET /projects/{id}/catalog` (combinado: rubros + items +
+  insumos en una call). 11 tests verdes; verificado contra proyecto real
+  (3 rubros, 10 items APU, 33 insumos en mat/mo/eq/sub).
+
+### Frontend
+- **Auth + multi-empresa ✅**: vista "Proyectos (Odoo)" con login
+  (email + API key), selector de empresa con switch en vivo, listado de
+  proyectos reales con datos APU (plan activo, costo real, margen, readiness).
+  Sesión persiste entre refreshes via localStorage + validación con /auth/me.
+- **Project detail + catálogo ✅**: click en card abre vista de detalle con
+  tabs (Catálogo activo; Plan y Consumos placeholders). Catálogo muestra:
+  KPIs (presupuesto, costo real, # rubros/items/insumos), tabla de items
+  agrupada por rubro con cantidad/PU/subtotal/incidencia, panel de insumos
+  con tipo (mat/mo/eq/sub), PU, cantidad, monto y producto Odoo vinculado.
 
 ### Architecture
 - **Decisión 2026-04-26**: integración con Odoo via gateway FastAPI separado
