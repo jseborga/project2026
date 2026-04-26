@@ -29,6 +29,7 @@ function App() {
   }, [tweaks.dark, tweaks.density, tweaks.accentColor]);
 
   const titles = {
+    projects:     { t: "Proyectos", s: "Datos reales desde tu Odoo" },
     dashboard:    { t: "Resumen", s: "Estado general del proyecto" },
     gantt:        { t: "Cronograma", s: "Diagrama de Gantt · 18 tareas · 3 hitos" },
     construction: { t: "Construcción", s: "Ítems, paquetes y matriz de asignación" },
@@ -53,6 +54,7 @@ function App() {
         )}
 
         <div className={"view-area" + (isFullscreen ? " view-area-flush" : "")}>
+          {view === "projects" && <ProjectsView tweaks={tweaks} />}
           {view === "dashboard" && <DashboardView tweaks={tweaks} />}
           {view === "gantt" && <GanttView tweaks={tweaks} />}
           {view === "construction" && <ConstructionView tweaks={tweaks} />}

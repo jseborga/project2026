@@ -134,6 +134,7 @@ function Pill({ children, tone = "neutral", size = "sm" }) {
 // ── Sidebar ─────────────────────────────────────────────────────────────────
 function Sidebar({ view, onView }) {
   const items = [
+    { id: "projects",  label: "Proyectos (Odoo)", icon: "package" },
     { id: "dashboard", label: "Resumen",   icon: "home" },
     { id: "gantt",     label: "Cronograma", icon: "gantt" },
     { id: "construction", label: "Construcción", icon: "package" },
