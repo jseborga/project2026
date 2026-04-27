@@ -7,6 +7,47 @@ Todos los cambios notables del proyecto se registran aquí. Formato basado en
 ## [Unreleased]
 
 ### Architecture
+- **Decisión 2026-04-27 — modo dual (Odoo + nativo) + offline-first.** Roadmap
+  fases 7→11 acordado: la app va a soportar proyectos `source: "odoo"` (proxy
+  via gateway, como hoy) y `source: "native"` (DB propia en el gateway, sin
+  cruce con ERP). En paralelo, paridad funcional con módulos APU (catálogo,
+  consumos, cuadrillas) para proyectos nativos. Auth propia con login Odoo
+  como vinculación opcional. Objetivo final offline-first con sync
+  bidireccional. Importación de catálogo APU desde Odoo (read-only, copia con
+  trazabilidad) en Fase 11.
+  - Fase 7: Postgres + auth propia + RBAC + native projects con plan/Gantt online.
+  - Fase 8: catálogo + consumos + cuadrillas nativos (paridad APU).
+  - Fase 9: PWA instalable + offline de lectura.
+  - Fase 10: offline-first con cola de mutaciones + sync.
+  - Fase 11: importar catálogo `construction_apu` al catálogo nativo.
+
+### Fase 7.0 ✅ — Cimiento DB (gateway)
+- Sumadas dependencias `sqlalchemy>=2.0`, `alembic>=1.13`, `psycopg[binary]`.
+- `app/core/db.py`: engine + sessionmaker lazy-init, `Base` declarativa,
+  `get_db` para FastAPI, `reset_engine_for_tests` para aislar fixtures.
+- `app/models/base.py`: mixins `UUIDPKMixin`, `TimestampMixin`,
+  `SoftDeleteMixin`, `SyncMixin (client_id + op_id)`. Diseñados desde el
+  día 1 pensando en Fase 10 — UUIDs permiten generar IDs offline; `op_id`
+  unique-nullable da idempotencia para reaplicar mutaciones encoladas.
+- `app/models/user.py`: tabla `users` (id UUID, email unique, password_hash,
+  display_name, is_active, timestamps, soft delete). Auth propia se cablea
+  en Fase 7.1.
+- Alembic configurado: `alembic.ini`, `env.py` que toma URL de
+  `app.core.config.settings`, `script.py.mako`, migración inicial
+  `0001_initial_users.py`.
+- `app/main.py`: nuevo `GET /health/db` que valida conexión con `SELECT 1`,
+  responde 503 si la DB está caída (no rompe `/health`).
+- `Dockerfile`: copia `alembic/` + `alembic.ini`, CMD ahora corre
+  `alembic upgrade head` antes de `uvicorn` (falla rápido si la migración
+  rompe).
+- `.env.example`: nueva var `DATABASE_URL`. Default dev: SQLite local;
+  prod EasyPanel: `postgresql+psycopg://...`.
+- 4 tests nuevos (`test_db.py`): UUID + timestamps autopopulan, email
+  unique, `/health/db` responde 200, migración 0001 corre limpia contra
+  DB vacía. **37 totales en gateway** (33 previos + 4).
+- Pendiente del usuario: provisionar Postgres en EasyPanel y setear
+  `DATABASE_URL` en el servicio `base-project2026-api`.
+
 - **Hallazgo 2026-04-26 (introspección Odoo)**: el módulo `construction_apu`
   + `seguimiento_proyecto` instalados en el Odoo del usuario son un mini-PM
   completo (CPM, EVM, baseline, cuadrillas, cómputos, BIM bridge). Esto
@@ -14,9 +55,9 @@ Todos los cambios notables del proyecto se registran aquí. Formato basado en
   gateway pasa a ser mayormente proxy + cache + auth. Schema de 81 modelos
   guardado en `project2026-api/schema.md` (gitignored). Mapping definitivo
   app↔Odoo en memoria del proyecto.
-- Plan de fases revisado: 1 (`/projects`) ✅ → 2 (catálogo APU) → 3 (plan
-  con `apu.project.plan.line`) → 4 (edición) → 5 (consumo via
-  `apu.cost.entry`) → 6 (vincular contratos PO/SO).
+- Plan de fases (1→6) ya cerrado: 1 (`/projects`) ✅ → 2 (catálogo APU) ✅ →
+  3 (plan) ✅ → 4 (edición) ✅ → 5 (consumos `apu.cost.entry`) ✅ →
+  6 (contratos PO) ✅.
 
 ### Gateway (project2026-api)
 - **Fase 1 ✅**: `GET /projects` y `GET /projects/{id}` con filtro
