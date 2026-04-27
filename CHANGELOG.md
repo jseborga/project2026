@@ -62,6 +62,30 @@ Todos los cambios notables del proyecto se registran aquí. Formato basado en
   13 líneas (3 grupos + 10 actividades), 9 dependencias, 2 críticas,
   baseline lockeada el 2026-04-14.
 
+### Fase 5 ✅ — Registro de consumos (apu.cost.entry)
+- Gateway:
+  - `GET /projects/{id}/cost-entries`: lista con paginación + filtro
+    `only_manual`. Devuelve fecha, item APU, insumo, partner, employee,
+    cantidad, PU, monto, cost_stage (manual/purchase/bill/cash),
+    resource_type (mat/mo/eq/sub/oh).
+  - `POST /projects/{id}/cost-entries`: crea con cost_stage='manual'.
+    Valida que apu_item_id pertenezca al proyecto. resource_type se deduce
+    del insumo si no se manda. amount lo computa Odoo (qty * unit_cost).
+  - `DELETE /projects/{id}/cost-entries/{entry_id}`: solo entries
+    manuales no autogenerados; los originados en PO/bill/cash devuelven 409.
+  - 6 tests nuevos (29 totales). Verificado contra Odoo real (create →
+    counts_as_actual=true → unlink OK).
+- Frontend:
+  - Tab "Consumos" habilitado en ProjectDetailView con lazy-load.
+  - ConsumosTab: KPIs (costo total + por tipo), tabla de entries con
+    fecha/concepto/item/insumo/tipo/origen/cantidad/PU/monto. Notas debajo
+    del concepto. Botón ✕ para eliminar (solo manuales).
+  - NewCostEntryDialog: form modal con concepto, fecha (default hoy),
+    selector de item APU agrupado por rubro, selector de insumo filtrado
+    por las líneas del item (autocompleta PU), cantidad, costo unitario,
+    subtotal en vivo, notas. Submit → POST → refresh.
+- Cache buster styles.css?v=12.
+
 ### Fase 4 ✅ — Edición del plan (state-aware)
 - Gateway:
   - `PATCH /projects/{id}/plan/lines/{line_id}` — actualiza name, code,
