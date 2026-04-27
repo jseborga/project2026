@@ -66,6 +66,7 @@ const api = {
     apiFetch(`/projects/${projectId}/cost-entries`, { method: "POST", body: JSON.stringify(body) }),
   deleteCostEntry: (projectId, entryId) =>
     apiFetch(`/projects/${projectId}/cost-entries/${entryId}`, { method: "DELETE" }),
+  getContracts: (projectId) => apiFetch(`/projects/${projectId}/contracts`),
 };
 
 window.tramoApi = api;

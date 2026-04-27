@@ -1000,6 +1000,8 @@ function ProjectDetailView({ project, onBack }) {
   const [error, setError] = React.useState(null);
   const [costEntries, setCostEntries] = React.useState(null);
   const [costError, setCostError] = React.useState(null);
+  const [contracts, setContracts] = React.useState(null);
+  const [contractsError, setContractsError] = React.useState(null);
 
   // Catálogo: siempre lo precargamos (la otra tab puede cargarse on-demand)
   React.useEffect(() => {
@@ -1041,6 +1043,20 @@ function ProjectDetailView({ project, onBack }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, project.id]);
 
+  // Contratos: lazy
+  const loadContracts = React.useCallback(() => {
+    setContractsError(null);
+    return window.tramoApi.getContracts(project.id)
+      .then(c => setContracts(c))
+      .catch(e => { setContractsError(e.message); setContracts({purchase_orders: [], sale_orders_supported: false}); });
+  }, [project.id]);
+
+  React.useEffect(() => {
+    if (tab !== "contracts" || contracts) return;
+    loadContracts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, project.id]);
+
   return (
     <div className="proj-detail">
       <div className="proj-detail-head">
@@ -1066,6 +1082,9 @@ function ProjectDetailView({ project, onBack }) {
         </button>
         <button className={"proj-tab" + (tab === "consumos" ? " active" : "")} onClick={() => setTab("consumos")}>
           Consumos
+        </button>
+        <button className={"proj-tab" + (tab === "contracts" ? " active" : "")} onClick={() => setTab("contracts")}>
+          Contratos
         </button>
       </div>
 
@@ -1104,6 +1123,140 @@ function ProjectDetailView({ project, onBack }) {
             />
           )}
         </>
+      )}
+
+      {tab === "contracts" && (
+        <>
+          {contractsError && <div className="proj-error">⚠ {contractsError}</div>}
+          {!contracts && !contractsError && <div className="proj-loading">Cargando contratos…</div>}
+          {contracts && <ContractsTab project={project} contracts={contracts} />}
+        </>
+      )}
+    </div>
+  );
+}
+
+
+// ── ContractsTab ────────────────────────────────────────────────────────
+
+const PO_STATE_LBL = {
+  draft: "Borrador", sent: "Enviada", "to approve": "Por aprobar",
+  purchase: "Confirmada", done: "Hecha", cancel: "Cancelada",
+};
+const INV_STATUS_LBL = {
+  no: "Nada por facturar", "to invoice": "Por facturar",
+  invoiced: "Facturada", partial: "Parcial",
+};
+
+function ContractsTab({ project, contracts }) {
+  const pos = contracts.purchase_orders;
+  const currency = project.currency?.name || "";
+
+  const totalCommitted = pos.reduce((s, p) => s + (p.amount_total || 0), 0);
+  const totalLines = pos.reduce((s, p) => s + p.lines.length, 0);
+  // Calcular % facturado en base a qty_invoiced * price_unit (aproximación)
+  const totalInvoiced = pos.reduce((s, p) =>
+    s + p.lines.reduce((ls, ln) => ls + (ln.qty_invoiced || 0) * (ln.price_unit || 0), 0), 0);
+  const pctInvoiced = totalCommitted > 0 ? (totalInvoiced / totalCommitted) * 100 : 0;
+
+  return (
+    <div className="ctr-tab">
+      <div className="ctr-kpis">
+        <div className="cons-kpi"><span>POs activas</span><strong className="mono">{pos.length}</strong></div>
+        <div className="cons-kpi"><span>Total comprometido</span><strong className="mono">{_fmtN(totalCommitted)} {currency}</strong></div>
+        <div className="cons-kpi"><span>Facturado (estim.)</span><strong className="mono">{_fmtN(totalInvoiced)} {currency}</strong></div>
+        <div className="cons-kpi"><span>% facturado</span><strong className="mono">{pctInvoiced.toFixed(1)}%</strong></div>
+        <div className="cons-kpi"><span>Líneas totales</span><strong className="mono">{totalLines}</strong></div>
+      </div>
+
+      {!contracts.sale_orders_supported && (
+        <div className="ctr-info">
+          ℹ El módulo <code>sale_management</code> no está instalado en tu Odoo, así que esta vista
+          solo muestra órdenes de compra (subcontratos). Si lo instalás, aparecerán también las
+          ventas/contratos con clientes en una sección aparte.
+        </div>
+      )}
+
+      {pos.length === 0 ? (
+        <div className="proj-empty">
+          <strong>No hay órdenes de compra vinculadas a este proyecto.</strong>
+          <div style={{marginTop: 8, fontSize: 12, color: "var(--ink-3)"}}>
+            Cuando crees POs en Odoo (Compras → Órdenes de compra) y les asignes este proyecto,
+            van a aparecer acá automáticamente, con sus líneas, % recibido y % facturado.
+          </div>
+        </div>
+      ) : (
+        pos.map(po => <POCard key={po.id} po={po} currency={currency} />)
+      )}
+    </div>
+  );
+}
+
+
+function POCard({ po, currency }) {
+  const [open, setOpen] = React.useState(false);
+  const totalReceivedAmount = po.lines.reduce((s, ln) => s + (ln.qty_received || 0) * (ln.price_unit || 0), 0);
+  const totalInvoicedAmount = po.lines.reduce((s, ln) => s + (ln.qty_invoiced || 0) * (ln.price_unit || 0), 0);
+  const pctRecv = po.amount_total > 0 ? (totalReceivedAmount / po.amount_total) * 100 : 0;
+  const pctInv = po.amount_total > 0 ? (totalInvoicedAmount / po.amount_total) * 100 : 0;
+  return (
+    <div className="ctr-card">
+      <div className="ctr-card-head" onClick={() => setOpen(o => !o)}>
+        <div className="ctr-card-name">
+          <Icon name="chevronR" size={11} style={{transform: open ? "rotate(90deg)" : "none", transition:"transform .15s"}} />
+          <strong>{po.name}</strong>
+          {po.partner && <span className="ctr-vendor">{po.partner.name}</span>}
+        </div>
+        <div className="ctr-card-stats">
+          <span className={`ctr-state ctr-state-${po.state.replace(' ','-')}`}>{PO_STATE_LBL[po.state] || po.state}</span>
+          <span className={`ctr-inv ctr-inv-${po.invoice_status.replace(' ','-')}`}>{INV_STATUS_LBL[po.invoice_status] || po.invoice_status}</span>
+          <span className="mono">{_fmtN(po.amount_total)} {po.currency?.name || currency}</span>
+        </div>
+      </div>
+      <div className="ctr-progress-row">
+        <div className="ctr-progress" title={`${pctRecv.toFixed(1)}% recibido`}>
+          <span className="ctr-progress-l">Recibido</span>
+          <div className="ctr-bar"><div className="ctr-bar-fill ctr-bar-recv" style={{width: `${Math.min(100, pctRecv)}%`}} /></div>
+          <span className="mono ctr-progress-v">{pctRecv.toFixed(0)}%</span>
+        </div>
+        <div className="ctr-progress" title={`${pctInv.toFixed(1)}% facturado`}>
+          <span className="ctr-progress-l">Facturado</span>
+          <div className="ctr-bar"><div className="ctr-bar-fill ctr-bar-inv" style={{width: `${Math.min(100, pctInv)}%`}} /></div>
+          <span className="mono ctr-progress-v">{pctInv.toFixed(0)}%</span>
+        </div>
+        {po.date_order && <span className="ctr-date">Fecha: {po.date_order.slice(0, 10)}</span>}
+        {po.partner_ref && <span className="ctr-ref">Ref: {po.partner_ref}</span>}
+      </div>
+
+      {open && (
+        <table className="cat-table ctr-lines">
+          <thead>
+            <tr>
+              <th>Descripción</th>
+              <th>Producto</th>
+              <th>Unidad</th>
+              <th className="num">Cantidad</th>
+              <th className="num">Recibido</th>
+              <th className="num">Facturado</th>
+              <th className="num">PU</th>
+              <th className="num">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+            {po.lines.map(ln => (
+              <tr key={ln.id}>
+                <td>{ln.name}</td>
+                <td>{ln.product?.name || "—"}</td>
+                <td className="cat-uom">{ln.uom?.name || "—"}</td>
+                <td className="num mono">{_fmtN(ln.qty, 2)}</td>
+                <td className="num mono">{_fmtN(ln.qty_received, 2)}</td>
+                <td className="num mono">{_fmtN(ln.qty_invoiced, 2)}</td>
+                <td className="num mono">{_fmtN(ln.price_unit, 2)}</td>
+                <td className="num mono"><strong>{_fmtN(ln.subtotal)}</strong></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
     </div>
   );

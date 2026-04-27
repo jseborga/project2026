@@ -3149,3 +3149,64 @@ input, textarea, select { font-family: inherit; font-size: inherit; color: inher
   box-shadow: 0 0 0 3px var(--accent-bg);
 }
 .plan-field-input > select:disabled { background: var(--surface-2); color: var(--ink-3); }
+
+/* ── Contratos (Fase 6) ───────────────────────────────────────────── */
+.ctr-tab { display: flex; flex-direction: column; gap: 14px; }
+.ctr-kpis {
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.ctr-info {
+  background: rgba(91,122,140,0.08); color: #3b5e72;
+  border: 1px solid rgba(91,122,140,0.18);
+  font-size: 11px; padding: 8px 12px; border-radius: var(--radius);
+}
+.ctr-info code { background: var(--surface-2); padding: 1px 5px; border-radius: 3px; font-family: var(--font-mono); }
+
+.ctr-card {
+  background: var(--surface-1); border: 1px solid var(--border-1);
+  border-radius: var(--radius); overflow: hidden;
+}
+.ctr-card-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px; gap: 12px; cursor: pointer;
+  background: var(--surface-2); border-bottom: 1px solid var(--border-1);
+}
+.ctr-card-head:hover { background: var(--surface-3); }
+.ctr-card-name { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.ctr-card-name strong { color: var(--ink-1); font-family: var(--font-mono); }
+.ctr-vendor { color: var(--ink-2); font-size: 12px; }
+.ctr-card-stats { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+
+.ctr-state, .ctr-inv {
+  font-size: 9px; padding: 2px 6px; border-radius: 3px;
+  text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600;
+}
+.ctr-state-draft     { background: var(--surface-3); color: var(--ink-3); }
+.ctr-state-sent      { background: rgba(91,122,140,0.18); color: #3b5e72; }
+.ctr-state-purchase  { background: rgba(106,138,58,0.18); color: #4d6a26; }
+.ctr-state-done      { background: rgba(58,122,138,0.18); color: #1f5e72; }
+.ctr-state-cancel    { background: var(--surface-3); color: var(--ink-3); text-decoration: line-through; }
+.ctr-inv-no          { background: var(--surface-3); color: var(--ink-3); }
+.ctr-inv-to-invoice  { background: var(--accent-bg); color: var(--accent-fg); }
+.ctr-inv-invoiced    { background: rgba(106,138,58,0.18); color: #4d6a26; }
+.ctr-inv-partial     { background: rgba(160,106,58,0.18); color: #6e4520; }
+
+.ctr-progress-row {
+  display: flex; align-items: center; gap: 16px; padding: 8px 14px;
+  border-bottom: 1px solid var(--border-1);
+  font-size: 11px; color: var(--ink-3);
+  flex-wrap: wrap;
+}
+.ctr-progress { display: flex; align-items: center; gap: 8px; min-width: 180px; }
+.ctr-progress-l { font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; min-width: 60px; }
+.ctr-progress-v { font-size: 11px; color: var(--ink-2); min-width: 30px; }
+.ctr-bar { flex: 1; height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+.ctr-bar-fill { height: 100%; transition: width .2s; }
+.ctr-bar-recv { background: #5b7a8c; }
+.ctr-bar-inv  { background: var(--accent); }
+.ctr-date, .ctr-ref { font-size: 11px; }
+.ctr-ref { color: var(--ink-2); }
+
+.ctr-lines { font-size: 11px; }
+.ctr-lines th { font-size: 9px; padding: 6px 10px; }
+.ctr-lines td { padding: 6px 10px; }
