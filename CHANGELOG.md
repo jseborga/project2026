@@ -62,6 +62,28 @@ Todos los cambios notables del proyecto se registran aquí. Formato basado en
   13 líneas (3 grupos + 10 actividades), 9 dependencias, 2 críticas,
   baseline lockeada el 2026-04-14.
 
+### Fase 6 ✅ — Contratos (purchase orders)
+- Hallazgo: el módulo `sale_management` NO está instalado en este Odoo,
+  así que esta fase cubre solo `purchase.order`. Si se instala ventas,
+  agregamos sale.order en una sub-sección.
+- Gateway:
+  - `GET /projects/{id}/contracts`: lee POs del proyecto + sus líneas en
+    batch. Devuelve header (vendor, partner_ref, state, invoice_status,
+    fechas, totales) + lines (descripción, producto, uom, qty, qty_received,
+    qty_invoiced, PU, subtotal, total). Detecta presencia del módulo sale
+    y expone `sale_orders_supported: bool`.
+  - 4 tests nuevos (33 totales). Verificado: 0 POs en sistema (esperado).
+- Frontend:
+  - Tab "Contratos" en ProjectDetailView con lazy-load.
+  - ContractsTab: KPIs (POs activas, total comprometido, facturado
+    estimado, % facturado, # líneas), aviso si sale_management no está
+    instalado, empty state explicativo cuando no hay POs.
+  - POCard expandible: header con nombre, vendor, badges (state +
+    invoice_status), total. Barras de progreso en vivo (% recibido y
+    % facturado). Click despliega tabla de líneas con qty, qty_received,
+    qty_invoiced, PU, subtotal.
+- Cache buster styles.css?v=13.
+
 ### Fase 5 ✅ — Registro de consumos (apu.cost.entry)
 - Gateway:
   - `GET /projects/{id}/cost-entries`: lista con paginación + filtro
