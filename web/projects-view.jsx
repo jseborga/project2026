@@ -998,6 +998,8 @@ function ProjectDetailView({ project, onBack }) {
   const [planError, setPlanError] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(null);
+  const [costEntries, setCostEntries] = React.useState(null);
+  const [costError, setCostError] = React.useState(null);
 
   // Catálogo: siempre lo precargamos (la otra tab puede cargarse on-demand)
   React.useEffect(() => {
@@ -1025,6 +1027,20 @@ function ProjectDetailView({ project, onBack }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, project.id]);
 
+  // Consumos: lazy
+  const loadCostEntries = React.useCallback(() => {
+    setCostError(null);
+    return window.tramoApi.listCostEntries(project.id)
+      .then(list => setCostEntries(list))
+      .catch(e => { setCostError(e.message); setCostEntries([]); });
+  }, [project.id]);
+
+  React.useEffect(() => {
+    if (tab !== "consumos" || costEntries) return;
+    loadCostEntries();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, project.id]);
+
   return (
     <div className="proj-detail">
       <div className="proj-detail-head">
@@ -1048,7 +1064,7 @@ function ProjectDetailView({ project, onBack }) {
         <button className={"proj-tab" + (tab === "plan" ? " active" : "")} onClick={() => setTab("plan")}>
           Plan
         </button>
-        <button className="proj-tab proj-tab-disabled" disabled title="Próximamente (fase 5)">
+        <button className={"proj-tab" + (tab === "consumos" ? " active" : "")} onClick={() => setTab("consumos")}>
           Consumos
         </button>
       </div>
@@ -1074,6 +1090,253 @@ function ProjectDetailView({ project, onBack }) {
           {planData && <PlanTab project={project} plan={planData} onReload={loadPlan} />}
         </>
       )}
+
+      {tab === "consumos" && (
+        <>
+          {costError && <div className="proj-error">⚠ {costError}</div>}
+          {!costEntries && !costError && <div className="proj-loading">Cargando consumos…</div>}
+          {costEntries && (
+            <ConsumosTab
+              project={project}
+              catalog={catalog}
+              entries={costEntries}
+              onReload={loadCostEntries}
+            />
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+
+// ── ConsumosTab ─────────────────────────────────────────────────────────
+
+function ConsumosTab({ project, catalog, entries, onReload }) {
+  const [showForm, setShowForm] = React.useState(false);
+  const [busy, setBusy] = React.useState(null); // entry id being deleted
+
+  const currency = project.currency?.name || "";
+  const total = entries.reduce((s, e) => s + (e.amount || 0), 0);
+  const totalsByType = {};
+  ["mat", "mo", "eq", "sub", "oh"].forEach(t => totalsByType[t] = 0);
+  entries.forEach(e => { totalsByType[e.resource_type] = (totalsByType[e.resource_type] || 0) + (e.amount || 0); });
+  const stageCount = entries.reduce((acc, e) => { acc[e.cost_stage] = (acc[e.cost_stage] || 0) + 1; return acc; }, {});
+
+  const onDelete = async (id) => {
+    if (!window.confirm("¿Eliminar este consumo? Esta acción no se puede deshacer.")) return;
+    setBusy(id);
+    try {
+      await window.tramoApi.deleteCostEntry(project.id, id);
+      await onReload();
+    } catch (e) {
+      alert(`No se pudo eliminar: ${e.message}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="cons-tab">
+      <div className="cons-toolbar">
+        <div className="cons-kpis">
+          <div className="cons-kpi"><span>Costo total real</span><strong className="mono">{_fmtN(total)} {currency}</strong></div>
+          {Object.entries(totalsByType).filter(([_, v]) => v > 0).map(([t, v]) => (
+            <div className="cons-kpi" key={t}><span className={`cat-type cat-type-${t}`}>{TYPE_LBL[t] || t}</span><strong className="mono">{_fmtN(v)}</strong></div>
+          ))}
+          <div className="cons-kpi"><span>Entries totales</span><strong className="mono">{entries.length}</strong></div>
+        </div>
+        <button className="btn-primary" onClick={() => setShowForm(true)}>+ Nuevo consumo</button>
+      </div>
+
+      {entries.length === 0 ? (
+        <div className="proj-empty">
+          Sin consumos registrados. Click en <strong>+ Nuevo consumo</strong> para registrar el primero.
+        </div>
+      ) : (
+        <table className="cat-table cons-table">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Concepto</th>
+              <th>Item APU</th>
+              <th>Insumo</th>
+              <th>Tipo</th>
+              <th>Origen</th>
+              <th className="num">Cantidad</th>
+              <th className="num">PU</th>
+              <th className="num">Monto</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map(e => (
+              <tr key={e.id}>
+                <td className="mono">{e.date}</td>
+                <td>{e.name}{e.notes && <div className="cons-notes">{e.notes}</div>}</td>
+                <td>{e.apu_item?.name || "—"}</td>
+                <td>{e.insumo?.name || "—"}</td>
+                <td><span className={`cat-type cat-type-${e.resource_type}`}>{e.resource_type.toUpperCase()}</span></td>
+                <td><span className={`cons-stage cons-stage-${e.cost_stage}`}>{e.cost_stage}</span></td>
+                <td className="num mono">{_fmtN(e.quantity, 2)}</td>
+                <td className="num mono">{_fmtN(e.unit_cost, 2)}</td>
+                <td className="num mono"><strong>{_fmtN(e.amount)}</strong></td>
+                <td>
+                  {e.cost_stage === "manual" && !e.auto_generated && (
+                    <button className="cons-del" onClick={() => onDelete(e.id)} disabled={busy === e.id} title="Eliminar">
+                      {busy === e.id ? "…" : "✕"}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {showForm && (
+        <NewCostEntryDialog
+          project={project}
+          catalog={catalog}
+          onClose={() => setShowForm(false)}
+          onSaved={async () => {
+            setShowForm(false);
+            await onReload();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+
+function NewCostEntryDialog({ project, catalog, onClose, onSaved }) {
+  // Si todavía no cargó el catálogo (raro, pero posible) lo pedimos al vuelo
+  const [cat, setCat] = React.useState(catalog);
+  React.useEffect(() => {
+    if (!cat) {
+      window.tramoApi.getCatalog(project.id).then(setCat).catch(() => {});
+    }
+  }, [cat, project.id]);
+
+  const [form, setForm] = React.useState({
+    name: "",
+    date: new Date().toISOString().slice(0, 10),
+    apu_item_id: "",
+    insumo_id: "",
+    quantity: "",
+    unit_cost: "",
+    notes: "",
+  });
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState(null);
+
+  // Items del proyecto (no grupos)
+  const items = React.useMemo(() => (cat?.items || []).filter(it => !it.is_complementary), [cat]);
+  const selectedItem = React.useMemo(() => items.find(it => it.id === Number(form.apu_item_id)), [items, form.apu_item_id]);
+  const insumosForItem = selectedItem?.lines || [];
+  const selectedLine = insumosForItem.find(ln => ln.insumo?.id === Number(form.insumo_id));
+
+  // Cuando cambia el insumo, autocompletamos PU si no había uno
+  React.useEffect(() => {
+    if (selectedLine && !form.unit_cost) {
+      setForm(f => ({ ...f, unit_cost: String(selectedLine.price_unit) }));
+    }
+  }, [selectedLine?.id]);  // eslint-disable-line
+
+  const subtotal = (Number(form.quantity) || 0) * (Number(form.unit_cost) || 0);
+
+  const submit = async (e) => {
+    e?.preventDefault?.();
+    if (!form.name || !form.apu_item_id || !form.quantity || !form.unit_cost) return;
+    setSaving(true); setError(null);
+    try {
+      await window.tramoApi.createCostEntry(project.id, {
+        name: form.name,
+        date: form.date,
+        apu_item_id: Number(form.apu_item_id),
+        insumo_id: form.insumo_id ? Number(form.insumo_id) : undefined,
+        quantity: Number(form.quantity),
+        unit_cost: Number(form.unit_cost),
+        notes: form.notes || undefined,
+      });
+      onSaved();
+    } catch (e) {
+      setError(e.message);
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="plan-dialog-backdrop" onClick={onClose}>
+      <form className="plan-dialog" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
+        <div className="plan-dialog-head">
+          <div>
+            <div className="plan-dialog-title">Registrar consumo</div>
+            <div className="plan-dialog-sub">Crea un apu.cost.entry manual en {project.name}</div>
+          </div>
+          <button type="button" className="plan-dialog-close" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="plan-dialog-body">
+          {!cat && <div className="proj-loading">Cargando catálogo…</div>}
+          {cat && (
+            <>
+              <Field label="Concepto *">
+                <input value={form.name} onChange={(e) => setForm(f => ({...f, name: e.target.value}))} placeholder="Ej: Cemento usado en zapata Z-12" autoFocus required />
+              </Field>
+              <Field label="Fecha">
+                <input type="date" value={form.date} onChange={(e) => setForm(f => ({...f, date: e.target.value}))} />
+              </Field>
+              <Field label="Item APU *">
+                <select value={form.apu_item_id} onChange={(e) => setForm(f => ({...f, apu_item_id: e.target.value, insumo_id: "", unit_cost: ""}))} required>
+                  <option value="">— Elegir item —</option>
+                  {(cat.rubros || []).map(r => (
+                    <optgroup key={r.id} label={r.name}>
+                      {items.filter(it => it.rubro?.id === r.id).map(it => (
+                        <option key={it.id} value={it.id}>{it.name}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Insumo (opcional)">
+                <select value={form.insumo_id} onChange={(e) => setForm(f => ({...f, insumo_id: e.target.value, unit_cost: ""}))} disabled={!selectedItem || insumosForItem.length === 0}>
+                  <option value="">— Sin insumo específico —</option>
+                  {insumosForItem.map(ln => (
+                    <option key={ln.id} value={ln.insumo?.id || ""}>
+                      [{ln.type.toUpperCase()}] {ln.insumo?.name} (PU {_fmtN(ln.price_unit, 2)})
+                    </option>
+                  ))}
+                </select>
+                {selectedItem && insumosForItem.length === 0 && <small>Este item no tiene insumos definidos.</small>}
+              </Field>
+              <div className="cons-form-row">
+                <Field label="Cantidad *">
+                  <input type="number" step="0.01" min="0" value={form.quantity} onChange={(e) => setForm(f => ({...f, quantity: e.target.value}))} required />
+                </Field>
+                <Field label="Costo unitario *">
+                  <input type="number" step="0.01" min="0" value={form.unit_cost} onChange={(e) => setForm(f => ({...f, unit_cost: e.target.value}))} required />
+                </Field>
+                <Field label="Subtotal">
+                  <input type="text" value={`${_fmtN(subtotal, 2)} ${project.currency?.name || ""}`} disabled />
+                </Field>
+              </div>
+              <Field label="Notas">
+                <input value={form.notes} onChange={(e) => setForm(f => ({...f, notes: e.target.value}))} placeholder="Observaciones (opcional)" />
+              </Field>
+              {error && <div className="proj-error">⚠ {error}</div>}
+            </>
+          )}
+        </div>
+
+        <div className="plan-dialog-foot">
+          <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+          <button type="submit" className="btn-primary" disabled={saving || !cat || !form.name || !form.apu_item_id || !form.quantity || !form.unit_cost}>
+            {saving ? "Guardando…" : "Registrar consumo"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

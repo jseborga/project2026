@@ -60,6 +60,12 @@ const api = {
     body: JSON.stringify(patch),
   }),
   unlockPlan: (projectId) => apiFetch(`/projects/${projectId}/plan/unlock`, { method: "POST" }),
+  listCostEntries: (projectId, { limit = 200, only_manual = false } = {}) =>
+    apiFetch(`/projects/${projectId}/cost-entries?limit=${limit}&only_manual=${only_manual}`),
+  createCostEntry: (projectId, body) =>
+    apiFetch(`/projects/${projectId}/cost-entries`, { method: "POST", body: JSON.stringify(body) }),
+  deleteCostEntry: (projectId, entryId) =>
+    apiFetch(`/projects/${projectId}/cost-entries/${entryId}`, { method: "DELETE" }),
 };
 
 window.tramoApi = api;
